@@ -44,11 +44,16 @@ pub fn available_styles() -> Vec<StyleInfo> {
             description: "Radial rays from center with fading edges and center dot.".to_string(),
             sample_seed: "nanook".to_string(),
         },
+        StyleInfo {
+            name: "mosaic".to_string(),
+            description: "6×6 grid of shapes with harmonious color palette (complementary/triadic/analogous).".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
     ]
 }
 
 pub fn is_valid_style(style: &str) -> bool {
-    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst")
+    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic")
 }
 
 pub const DEFAULT_STYLE: &str = "geometric";

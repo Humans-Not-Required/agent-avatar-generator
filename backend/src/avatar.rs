@@ -37,6 +37,146 @@ pub fn bg_color_from_hash(hash: &[u8; 32]) -> (u8, u8, u8) {
     (pastel(r), pastel(g), pastel(b))
 }
 
+/// Convert HSL to RGB. h: 0-360, s: 0.0-1.0, l: 0.0-1.0
+fn hsl_to_rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r, g, b) = match h as u32 {
+        0..=59 => (c, x, 0.0),
+        60..=119 => (x, c, 0.0),
+        120..=179 => (0.0, c, x),
+        180..=239 => (0.0, x, c),
+        240..=299 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    (
+        ((r + m) * 255.0).round() as u8,
+        ((g + m) * 255.0).round() as u8,
+        ((b + m) * 255.0).round() as u8,
+    )
+}
+
+/// Generate a harmonious color palette from hash bytes.
+/// Returns 4-5 colors that work well together based on color theory.
+fn harmonious_palette(hash: &[u8; 32]) -> Vec<(u8, u8, u8)> {
+    // Base hue from first 2 bytes (0-360)
+    let base_hue = ((hash[0] as f64 * 256.0 + hash[1] as f64) / 65535.0) * 360.0;
+    let saturation = 0.55 + (hash[2] as f64 / 255.0) * 0.3; // 0.55-0.85
+    let lightness = 0.45 + (hash[3] as f64 / 255.0) * 0.15; // 0.45-0.60
+
+    // Choose harmony type from hash
+    let harmony = hash[4] % 4;
+    let hues = match harmony {
+        0 => {
+            // Complementary: base + opposite
+            vec![base_hue, (base_hue + 180.0) % 360.0, (base_hue + 30.0) % 360.0, (base_hue + 210.0) % 360.0]
+        }
+        1 => {
+            // Triadic: 120° apart
+            vec![base_hue, (base_hue + 120.0) % 360.0, (base_hue + 240.0) % 360.0, (base_hue + 60.0) % 360.0]
+        }
+        2 => {
+            // Analogous: close hues
+            vec![base_hue, (base_hue + 30.0) % 360.0, (base_hue + 60.0) % 360.0, (base_hue + 330.0) % 360.0]
+        }
+        _ => {
+            // Split-complementary: base + two flanking opposite
+            vec![base_hue, (base_hue + 150.0) % 360.0, (base_hue + 210.0) % 360.0, (base_hue + 90.0) % 360.0]
+        }
+    };
+
+    hues.iter()
+        .enumerate()
+        .map(|(i, &h)| {
+            // Vary lightness slightly per color
+            let l_offset = (i as f64 * 0.06) - 0.09;
+            hsl_to_rgb(h, saturation, (lightness + l_offset).clamp(0.3, 0.7))
+        })
+        .collect()
+}
+
+/// Generate a mosaic avatar with harmonious color palette.
+pub fn generate_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let palette = harmonious_palette(&hash);
+    let bg = bg_override.unwrap_or_else(|| {
+        let base_hue = ((hash[0] as f64 * 256.0 + hash[1] as f64) / 65535.0) * 360.0;
+        hsl_to_rgb(base_hue, 0.15, 0.92) // Very light pastel bg
+    });
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    let grid = 6u32;
+    let cell = size / grid;
+    let margin = (cell as f64 * 0.12) as u32;
+
+    for row in 0..grid {
+        for col in 0..grid {
+            let idx = (row * grid + col) as usize;
+            let h = hash[(idx * 3) % 32];
+            let shape = hash[(idx * 3 + 1) % 32];
+
+            // Pick color from palette
+            let color = palette[(h as usize) % palette.len()];
+            let x0 = col * cell + margin;
+            let y0 = row * cell + margin;
+            let x1 = (col + 1) * cell - margin;
+            let y1 = (row + 1) * cell - margin;
+            let cx = x0 + (x1 - x0) / 2;
+            let cy = y0 + (y1 - y0) / 2;
+            let r = ((x1 - x0) / 2).min((y1 - y0) / 2);
+
+            match shape % 5 {
+                0 => {
+                    // Full square
+                    fill_rect(&mut img, x0, y0, x1, y1, color);
+                }
+                1 => {
+                    // Circle
+                    fill_circle(&mut img, cx, cy, r, color);
+                }
+                2 => {
+                    // Diamond (filled rect rotated — approximate with triangle pairs)
+                    // Top triangle
+                    for dy in 0..r {
+                        let w = dy;
+                        fill_rect(&mut img, cx.saturating_sub(w), cy.saturating_sub(r) + dy, cx + w + 1, cy.saturating_sub(r) + dy + 1, color);
+                    }
+                    // Bottom triangle
+                    for dy in 0..r {
+                        let w = r - dy;
+                        fill_rect(&mut img, cx.saturating_sub(w), cy + dy, cx + w + 1, cy + dy + 1, color);
+                    }
+                }
+                3 => {
+                    // Half-filled (top half)
+                    fill_rect(&mut img, x0, y0, x1, cy, color);
+                }
+                _ => {
+                    // Quarter circle (bottom-right)
+                    for py in cy..y1 {
+                        for px in cx..x1 {
+                            let dx = (px as f64 - cx as f64).abs();
+                            let dy = (py as f64 - cy as f64).abs();
+                            if dx * dx + dy * dy <= (r as f64 * r as f64)
+                                && px < size && py < size
+                            {
+                                img.put_pixel(px, py, Rgba([color.0, color.1, color.2, 255]));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    img
+}
+
 /// Generate a geometric identicon (5×5 grid, vertically symmetric).
 pub fn generate_geometric(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
@@ -673,6 +813,7 @@ pub fn generate_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>
         "gradient" => Ok(svg_gradient(seed, size, bg)),
         "initials" => Ok(svg_initials(seed, size, bg)),
         "starburst" => Ok(svg_starburst(seed, size, bg)),
+        "mosaic" => Ok(svg_mosaic(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -687,6 +828,7 @@ pub fn generate_image(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8
         "gradient" => Ok(generate_gradient(seed, size, bg)),
         "initials" => Ok(generate_initials(seed, size, bg)),
         "starburst" => Ok(generate_starburst(seed, size, bg)),
+        "mosaic" => Ok(generate_mosaic(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -1250,6 +1392,80 @@ fn svg_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> St
     )
 }
 
+fn svg_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let palette = harmonious_palette(&hash);
+    let bg = bg_override.unwrap_or_else(|| {
+        let base_hue = ((hash[0] as f64 * 256.0 + hash[1] as f64) / 65535.0) * 360.0;
+        hsl_to_rgb(base_hue, 0.15, 0.92)
+    });
+
+    let grid = 6u32;
+    let cell = size / grid;
+    let margin = (cell as f64 * 0.12) as u32;
+
+    let mut shapes = String::new();
+
+    for row in 0..grid {
+        for col in 0..grid {
+            let idx = (row * grid + col) as usize;
+            let h = hash[(idx * 3) % 32];
+            let shape = hash[(idx * 3 + 1) % 32];
+            let color = palette[(h as usize) % palette.len()];
+            let hex = hex_color(color);
+
+            let x0 = col * cell + margin;
+            let y0 = row * cell + margin;
+            let w = cell - margin * 2;
+            let h_dim = cell - margin * 2;
+            let cx = x0 + w / 2;
+            let cy = y0 + h_dim / 2;
+            let r = w.min(h_dim) / 2;
+
+            match shape % 5 {
+                0 => {
+                    // Square
+                    shapes.push_str(&format!(
+                        r#"<rect x="{x0}" y="{y0}" width="{w}" height="{h_dim}" rx="2" fill="{hex}"/>"#,
+                    ));
+                }
+                1 => {
+                    // Circle
+                    shapes.push_str(&format!(
+                        r#"<circle cx="{cx}" cy="{cy}" r="{r}" fill="{hex}"/>"#,
+                    ));
+                }
+                2 => {
+                    // Diamond
+                    shapes.push_str(&format!(
+                        r#"<polygon points="{cx},{y0} {},{cy} {cx},{} {x0},{cy}" fill="{hex}"/>"#,
+                        x0 + w, y0 + h_dim,
+                    ));
+                }
+                3 => {
+                    // Half-filled (top)
+                    shapes.push_str(&format!(
+                        r#"<rect x="{x0}" y="{y0}" width="{w}" height="{}" rx="2" fill="{hex}"/>"#,
+                        h_dim / 2,
+                    ));
+                }
+                _ => {
+                    // Quarter circle
+                    shapes.push_str(&format!(
+                        r#"<path d="M{cx},{cy} L{},{cy} A{r},{r} 0 0 1 {cx},{}" Z" fill="{hex}"/>"#,
+                        cx + r, cy + r,
+                    ));
+                }
+            }
+        }
+    }
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><rect width="{size}" height="{size}" fill="{bg}"/>{shapes}</svg>"#,
+        bg = hex_color(bg),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1270,7 +1486,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_png() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic"] {
             let result = generate_png("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid PNG");
             assert!(!result.unwrap().is_empty(), "Style {style} PNG should not be empty");
@@ -1279,7 +1495,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_svg() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic"] {
             let result = generate_svg("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid SVG");
             let svg = result.unwrap();

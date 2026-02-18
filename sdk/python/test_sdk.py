@@ -120,7 +120,7 @@ class TestStyles(unittest.TestCase):
     def test_list_styles(self):
         styles = self.client.styles()
         self.assertIsInstance(styles, list)
-        self.assertEqual(len(styles), 7)
+        self.assertEqual(len(styles), 8)
         names = [s["name"] for s in styles]
         self.assertIn("geometric", names)
         self.assertIn("rings", names)
@@ -386,6 +386,57 @@ class TestStarburstStyle(unittest.TestCase):
             data = self.client.generate("star", style="starburst", size=size)
             self.assertIsInstance(data, bytes)
             self.assertTrue(len(data) > 0)
+
+
+class TestMosaicStyle(unittest.TestCase):
+    def setUp(self):
+        url = os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        self.client = AvatarService(url)
+
+    def test_mosaic_png(self):
+        data = self.client.generate("mosaic-test", style="mosaic", size=128)
+        self.assertIsInstance(data, bytes)
+        self.assertTrue(len(data) > 100)
+
+    def test_mosaic_svg(self):
+        svg = self.client.generate_svg("mosaic-test", style="mosaic", size=128)
+        self.assertIn("<svg", svg)
+        self.assertIn("</svg>", svg)
+
+    def test_mosaic_deterministic(self):
+        a = self.client.generate("mosaic-det", style="mosaic", size=64)
+        b = self.client.generate("mosaic-det", style="mosaic", size=64)
+        self.assertEqual(a, b)
+
+    def test_mosaic_different_seeds(self):
+        a = self.client.generate("mosaic-a", style="mosaic", size=64)
+        b = self.client.generate("mosaic-b", style="mosaic", size=64)
+        self.assertNotEqual(a, b)
+
+    def test_mosaic_multiple_sizes(self):
+        for sz in [16, 64, 128, 256]:
+            data = self.client.generate("mosaic-sz", style="mosaic", size=sz)
+            self.assertTrue(len(data) > 0, f"Empty at size {sz}")
+
+    def test_mosaic_with_bg(self):
+        data = self.client.generate("mosaic-bg", style="mosaic", size=64, background="ff0000")
+        self.assertIsInstance(data, bytes)
+
+    def test_mosaic_batch(self):
+        results = self.client.batch(["m1", "m2", "m3"], style="mosaic", size=64)
+        self.assertEqual(len(results), 3)
+
+    def test_mosaic_save_png(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as f:
+            self.client.save("mosaic-save", f.name, style="mosaic", size=64)
+            self.assertTrue(os.path.getsize(f.name) > 0)
+
+    def test_mosaic_save_svg(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=True) as f:
+            self.client.save("mosaic-save", f.name, style="mosaic", size=64, fmt="svg")
+            self.assertTrue(os.path.getsize(f.name) > 0)
 
 
 class TestConstructor(unittest.TestCase):

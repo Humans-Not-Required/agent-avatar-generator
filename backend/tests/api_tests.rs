@@ -275,7 +275,7 @@ fn test_list_styles() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let styles = body.as_array().unwrap();
-    assert_eq!(styles.len(), 7);
+    assert_eq!(styles.len(), 8);
     let names: Vec<&str> = styles.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"geometric"));
     assert!(names.contains(&"rings"));
@@ -679,4 +679,67 @@ fn test_robot_large_size() {
     assert_eq!(response.status(), Status::Ok);
     let bytes = response.into_bytes().unwrap();
     assert!(bytes.len() > 1000, "Robot PNG too small at 512px");
+}
+
+// ── Mosaic Style ──
+
+#[test]
+fn test_mosaic_png() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/mosaic-test?style=mosaic&size=256").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type().unwrap(), ContentType::PNG);
+    let bytes = response.into_bytes().unwrap();
+    assert!(bytes.len() > 200);
+}
+
+#[test]
+fn test_mosaic_svg() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/mosaic-test?style=mosaic&size=256&format=svg").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("<svg"));
+    assert!(body.contains("</svg>"));
+}
+
+#[test]
+fn test_mosaic_deterministic() {
+    let client = client();
+    let response1 = client.get("/api/v1/avatar/mosaic-det?style=mosaic&size=128").dispatch();
+    let bytes1 = response1.into_bytes().unwrap();
+    let response2 = client.get("/api/v1/avatar/mosaic-det?style=mosaic&size=128").dispatch();
+    let bytes2 = response2.into_bytes().unwrap();
+    assert_eq!(bytes1, bytes2, "Mosaic should be deterministic");
+}
+
+#[test]
+fn test_mosaic_with_bg() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/mosaic-bg?style=mosaic&size=128&background=ff0000").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}
+
+#[test]
+fn test_mosaic_batch() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["m1", "m2", "m3"], "style": "mosaic", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 3);
+    for a in avatars {
+        assert!(a["error"].is_null());
+    }
+}
+
+#[test]
+fn test_mosaic_small() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/tiny-mosaic?style=mosaic&size=16").dispatch();
+    assert_eq!(response.status(), Status::Ok);
 }
