@@ -654,7 +654,8 @@ class TestRobotHeadShapes(unittest.TestCase):
         result = self.client.batch(seeds, style="robot", size=64)
         self.assertEqual(len(result), 10)
         for item in result:
-            self.assertTrue(len(item) > 10)
+            self.assertIn("data", item)
+            self.assertTrue(len(item["data"]) > 10)
 
     def test_robot_bg_override_with_head_shapes(self):
         """Background override works with new head shapes."""
