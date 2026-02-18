@@ -1,8 +1,8 @@
 # Agent Avatar Generator - Status
 
-## Current State: 10 Styles, Gallery ZIP, Enhanced Robot ✅
+## Current State: 10 Styles, 9 Color Themes, Gallery ZIP ✅
 
-Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
+Self-hosted deterministic avatar generation service with 10 styles, 9 color themes, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
 ### What's Done
 
@@ -44,8 +44,14 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
   - Style `"all"`: generates every style for each seed (seed × 10 styles)
   - Max 50 seeds, PNG or SVG format, custom size and background
   - Frontend: ZIP download button in gallery mode
-- **Tests:** 228 Rust (73 unit + 73 lib + 82 HTTP integration)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. 122 integration tests.
+- **Color Themes** — 9 themes applied via post-processing (works with all styles):
+  - `warm`, `cool`, `ocean`, `forest`, `sunset`, `neon`, `pastel`, `monochrome`, `earth`
+  - `GET /api/v1/themes` to list available themes
+  - `?theme=warm` query param on generate, batch, and gallery_zip endpoints
+  - HSL color remapping with intelligent background/foreground detection
+  - Configurable rate limit via RATE_LIMIT_MAX env var
+- **Tests:** 301 Rust (102 unit × 2 binaries + 97 HTTP integration)
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. 138 integration tests.
 
 ### Tech Stack
 
@@ -61,8 +67,9 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 
 - Performance optimization for large batch requests
 - Gallery: share gallery URL (gallery ZIP ✅ done)
-- Color themes: user-specified palette/mood presets
+- ~~Color themes: user-specified palette/mood presets~~ ✅ Done (9 themes)
 - Additional robot antenna styles and eye glow effects
+- Animated avatar support (GIF/APNG)
 
 ### ⚠️ Gotchas
 
