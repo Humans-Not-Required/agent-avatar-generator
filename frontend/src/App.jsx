@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset'];
 const THEMES = [
@@ -16,16 +16,36 @@ const THEMES = [
 const API_BASE = window.location.origin;
 const DEFAULT_GALLERY_SEEDS = 'nanook\nforge\ndrift\nlux\ngerundium\nsmoltbot\nclawrecipes\nagent-42';
 
+// Parse URL params on load for shareable gallery URLs
+function parseUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  const state = {};
+  if (params.has('mode')) state.mode = params.get('mode');
+  if (params.has('seed')) state.seed = params.get('seed');
+  if (params.has('seeds')) state.galleryText = params.get('seeds').split(',').join('\n');
+  if (params.has('style')) state.style = params.get('style');
+  if (params.has('size')) state.size = Math.max(16, Math.min(1024, parseInt(params.get('size'), 10) || 256));
+  if (params.has('format')) state.format = params.get('format');
+  if (params.has('theme')) state.theme = params.get('theme');
+  return state;
+}
+
 function App() {
-  const [mode, setMode] = useState('single');
-  const [seed, setSeed] = useState('nanook');
-  const [galleryText, setGalleryText] = useState(DEFAULT_GALLERY_SEEDS);
-  const [style, setStyle] = useState('geometric');
-  const [size, setSize] = useState(256);
-  const [format, setFormat] = useState('png');
+  const initial = parseUrlState();
+  const [mode, setMode] = useState(initial.mode || 'single');
+  const [seed, setSeed] = useState(initial.seed || 'nanook');
+  const [galleryText, setGalleryText] = useState(initial.galleryText || DEFAULT_GALLERY_SEEDS);
+  const [style, setStyle] = useState(initial.style && STYLES.includes(initial.style) ? initial.style : 'geometric');
+  const [size, setSize] = useState(initial.size || 256);
+  const [format, setFormat] = useState(initial.format === 'svg' ? 'svg' : 'png');
   const [copied, setCopied] = useState(false);
-  const [galleryStyle, setGalleryStyle] = useState('all');
-  const [theme, setTheme] = useState('none');
+  const [galleryCopied, setGalleryCopied] = useState(false);
+  const [galleryStyle, setGalleryStyle] = useState(
+    initial.mode === 'gallery' && initial.style ? (initial.style === 'all' || STYLES.includes(initial.style) ? initial.style : 'all') : 'all'
+  );
+  const [theme, setTheme] = useState(
+    initial.theme && THEMES.some(t => t.name === initial.theme) ? initial.theme : 'none'
+  );
   const [downloading, setDownloading] = useState(false);
 
   const gallerySeeds = galleryText
@@ -75,6 +95,24 @@ function App() {
     navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  // Build shareable gallery URL with all state encoded in query params
+  const buildGalleryShareUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set('mode', 'gallery');
+    params.set('seeds', gallerySeeds.join(','));
+    params.set('style', galleryStyle);
+    params.set('size', size.toString());
+    if (theme !== 'none') params.set('theme', theme);
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  }, [gallerySeeds, galleryStyle, size, theme]);
+
+  const copyGalleryUrl = () => {
+    navigator.clipboard.writeText(buildGalleryShareUrl()).then(() => {
+      setGalleryCopied(true);
+      setTimeout(() => setGalleryCopied(false), 2000);
     });
   };
 
@@ -289,9 +327,14 @@ function App() {
                       {gallerySeeds.length} avatar{gallerySeeds.length !== 1 ? 's' : ''}
                       {galleryStyle === 'all' ? ` × ${STYLES.length} styles` : ''}
                     </div>
-                    <button onClick={downloadZip} disabled={downloading} style={buttonStyle}>
-                      {downloading ? '⏳ Zipping...' : '📦 Download ZIP'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button onClick={copyGalleryUrl} style={buttonStyle}>
+                        {galleryCopied ? '✅ Copied!' : '🔗 Share Gallery'}
+                      </button>
+                      <button onClick={downloadZip} disabled={downloading} style={buttonStyle}>
+                        {downloading ? '⏳ Zipping...' : '📦 Download ZIP'}
+                      </button>
+                    </div>
                   </div>
 
                   {galleryStyle === 'all' ? (
