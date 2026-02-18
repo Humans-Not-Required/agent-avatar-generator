@@ -1466,3 +1466,179 @@ fn test_monochrome_theme_desaturated_svg() {
     }
     assert!(found_color, "Should have found at least one color in SVG");
 }
+
+// ── Theme Comparison Tests ──
+
+#[test]
+fn test_all_themes_produce_different_pngs() {
+    let client = client();
+    let themes = ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"];
+    let mut images: Vec<(String, Vec<u8>)> = Vec::new();
+
+    // Get unthemed version
+    let resp = client.get("/api/v1/avatar/compare-test?style=geometric&size=64").dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    images.push(("none".to_string(), resp.into_bytes().unwrap()));
+
+    // Get each themed version
+    for theme in &themes {
+        let resp = client.get(format!("/api/v1/avatar/compare-test?style=geometric&size=64&theme={theme}")).dispatch();
+        assert_eq!(resp.status(), Status::Ok);
+        images.push((theme.to_string(), resp.into_bytes().unwrap()));
+    }
+
+    // At least some themes should produce different images than unthemed
+    let base = &images[0].1;
+    let different_count = images[1..].iter().filter(|(_, img)| img != base).count();
+    assert!(different_count >= 5, "At least 5 of 9 themes should differ from unthemed (got {different_count})");
+}
+
+#[test]
+fn test_theme_comparison_batch_same_seed() {
+    // Batch request with same seed, testing theme variations
+    let client = client();
+    let resp = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["compare-seed"],"style":"robot","size":64,"theme":"warm"}"#)
+        .dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["count"], 1);
+    let warm_data = body["avatars"][0]["data"].as_str().unwrap().to_string();
+
+    let resp = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["compare-seed"],"style":"robot","size":64,"theme":"cool"}"#)
+        .dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    let cool_data = body["avatars"][0]["data"].as_str().unwrap().to_string();
+
+    assert_ne!(warm_data, cool_data, "Warm and cool themes should produce different outputs");
+}
+
+#[test]
+fn test_themed_svg_colors_differ_from_unthemed() {
+    let client = client();
+    let resp_plain = client.get("/api/v1/avatar/compare-svg?style=mosaic&format=svg").dispatch();
+    let svg_plain = resp_plain.into_string().unwrap();
+
+    let resp_neon = client.get("/api/v1/avatar/compare-svg?style=mosaic&format=svg&theme=neon").dispatch();
+    let svg_neon = resp_neon.into_string().unwrap();
+
+    assert_ne!(svg_plain, svg_neon, "Neon themed SVG should differ from plain");
+    // Both should be valid SVGs
+    assert!(svg_plain.starts_with("<svg"));
+    assert!(svg_neon.starts_with("<svg"));
+}
+
+#[test]
+fn test_compare_all_styles_same_seed_same_theme() {
+    // Simulates the compare mode "all styles" view
+    let client = client();
+    let styles = ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"];
+    let mut images: Vec<Vec<u8>> = Vec::new();
+
+    for style in &styles {
+        let resp = client.get(format!("/api/v1/avatar/compare-all?style={style}&size=64&theme=warm")).dispatch();
+        assert_eq!(resp.status(), Status::Ok);
+        images.push(resp.into_bytes().unwrap());
+    }
+
+    // All styles should be different from each other
+    for i in 0..images.len() {
+        for j in (i + 1)..images.len() {
+            assert_ne!(images[i], images[j], "Style {} and {} should produce different images", styles[i], styles[j]);
+        }
+    }
+}
+
+#[test]
+fn test_compare_theme_deterministic() {
+    let client = client();
+    // Same seed+style+theme should always produce same output
+    let resp1 = client.get("/api/v1/avatar/deterministic-compare?style=pixel&size=64&theme=ocean").dispatch();
+    let bytes1 = resp1.into_bytes().unwrap();
+
+    let resp2 = client.get("/api/v1/avatar/deterministic-compare?style=pixel&size=64&theme=ocean").dispatch();
+    let bytes2 = resp2.into_bytes().unwrap();
+
+    assert_eq!(bytes1, bytes2, "Themed avatar should be deterministic");
+}
+
+#[test]
+fn test_compare_zip_all_themes_for_seed() {
+    // Download ZIP with all styles for a single seed — useful for comparison export
+    let client = client();
+    let resp = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["theme-compare"],"style":"all","size":64,"theme":"forest"}"#)
+        .dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    assert_eq!(resp.content_type(), Some(ContentType::ZIP));
+
+    let bytes = resp.into_bytes().unwrap();
+    // ZIP header magic
+    assert_eq!(&bytes[..2], &[0x50, 0x4B]);
+
+    let reader = std::io::Cursor::new(&bytes);
+    let archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 10, "Should have 10 files (1 seed × 10 styles)");
+}
+
+#[test]
+fn test_gallery_zip_with_theme() {
+    let client = client();
+    let resp = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["a","b"],"style":"geometric","size":64,"theme":"pastel"}"#)
+        .dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    let bytes = resp.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(&bytes);
+    let archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 2, "Should have 2 files (2 seeds × 1 style)");
+}
+
+#[test]
+fn test_theme_timing_header_present() {
+    let client = client();
+    let resp = client.get("/api/v1/avatar/timing-test?style=geometric&size=64&theme=earth").dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    let timing = resp.headers().get_one("X-Generation-Time-Ms");
+    assert!(timing.is_some(), "Should have timing header");
+    let ms: f64 = timing.unwrap().parse().unwrap();
+    assert!(ms >= 0.0, "Timing should be non-negative");
+}
+
+#[test]
+fn test_batch_multiple_seeds_same_theme() {
+    let client = client();
+    let resp = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["alice","bob","charlie","dave","eve"],"style":"rings","size":64,"theme":"sunset"}"#)
+        .dispatch();
+    assert_eq!(resp.status(), Status::Ok);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["count"], 5);
+    let avatars = body["avatars"].as_array().unwrap();
+
+    // All should have data and no errors
+    for avatar in avatars {
+        assert!(!avatar["data"].as_str().unwrap().is_empty());
+        assert!(avatar["error"].is_null());
+    }
+
+    // All should be different from each other
+    let datas: Vec<&str> = avatars.iter().map(|a| a["data"].as_str().unwrap()).collect();
+    for i in 0..datas.len() {
+        for j in (i + 1)..datas.len() {
+            assert_ne!(datas[i], datas[j], "Different seeds should produce different themed avatars");
+        }
+    }
+}

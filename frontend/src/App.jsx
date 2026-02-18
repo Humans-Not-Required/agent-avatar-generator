@@ -13,6 +13,7 @@ const THEMES = [
   { name: 'monochrome', label: '⬛', desc: 'Mono' },
   { name: 'earth', label: '🪨', desc: 'Earth' },
 ];
+const THEME_NAMES = THEMES.filter(t => t.name !== 'none');
 const API_BASE = window.location.origin;
 const DEFAULT_GALLERY_SEEDS = 'nanook\nforge\ndrift\nlux\ngerundium\nsmoltbot\nclawrecipes\nagent-42';
 
@@ -46,7 +47,13 @@ function App() {
   const [theme, setTheme] = useState(
     initial.theme && THEMES.some(t => t.name === initial.theme) ? initial.theme : 'none'
   );
+  // Set initial gallery theme for compare/gallery from URL
+  const [galleryTheme] = useState(initial.theme || 'none');
   const [downloading, setDownloading] = useState(false);
+  const [compareStyle, setCompareStyle] = useState(
+    initial.mode === 'compare' && initial.style ? (initial.style === 'all' || STYLES.includes(initial.style) ? initial.style : 'all') : 'all'
+  );
+  const [compareCopied, setCompareCopied] = useState(false);
 
   const gallerySeeds = galleryText
     .split('\n')
@@ -141,6 +148,15 @@ function App() {
             }}
           >
             Gallery
+          </button>
+          <button
+            onClick={() => setMode('compare')}
+            style={{
+              ...modeButtonStyle,
+              ...(mode === 'compare' ? modeButtonActiveStyle : {}),
+            }}
+          >
+            Compare
           </button>
         </div>
 
@@ -256,12 +272,12 @@ function App() {
                 </button>
               </div>
             </>
-          ) : (
+          ) : mode === 'gallery' ? (
             /* ── Gallery Mode ── */
             <>
               <div style={fieldStyle}>
                 <label style={labelStyle}>
-                  Seeds <span style={{ color: '#666' }}>(one per line, max 50)</span>
+                  Seeds <span style={{ color: '#666' }}>(one per line, max 50)</span>{' '}
                 </label>
                 <textarea
                   value={galleryText}
@@ -303,6 +319,26 @@ function App() {
                         style={{ borderRadius: 6 }}
                       />
                       <span style={{ fontSize: '0.75rem' }}>{s}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Theme</label>
+                <div style={themeGridStyle}>
+                  {THEMES.map(t => (
+                    <button
+                      key={t.name}
+                      onClick={() => setTheme(t.name)}
+                      title={t.desc}
+                      style={{
+                        ...themeButtonStyle,
+                        ...(theme === t.name ? themeButtonActiveStyle : {}),
+                      }}
+                    >
+                      <span style={{ fontSize: '1rem' }}>{t.label}</span>
+                      <span style={{ fontSize: '0.65rem' }}>{t.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -384,6 +420,148 @@ function App() {
                           <span style={gallerySeedLabelStyle}>{gseed}</span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            /* ── Compare Mode ── */
+            <>
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Seed</label>
+                <input
+                  type="text"
+                  value={seed}
+                  onChange={e => setSeed(e.target.value)}
+                  placeholder="agent ID, email, name..."
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Style</label>
+                <div style={styleGridStyle}>
+                  <button
+                    onClick={() => setCompareStyle('all')}
+                    style={{
+                      ...styleButtonStyle,
+                      ...(compareStyle === 'all' ? styleButtonActiveStyle : {}),
+                      padding: '0.5rem 0.75rem',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.2rem' }}>✦</span>
+                    <span style={{ fontSize: '0.75rem' }}>all</span>
+                  </button>
+                  {STYLES.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setCompareStyle(s)}
+                      style={{
+                        ...styleButtonStyle,
+                        ...(compareStyle === s ? styleButtonActiveStyle : {}),
+                      }}
+                    >
+                      <img
+                        src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(seed || 'preview')}?style=${s}&size=48`}
+                        alt={s}
+                        width={48}
+                        height={48}
+                        style={{ borderRadius: 6 }}
+                      />
+                      <span style={{ fontSize: '0.75rem' }}>{s}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Size: {size}px</label>
+                <input
+                  type="range"
+                  min={16}
+                  max={512}
+                  value={size}
+                  onChange={e => setSize(Number(e.target.value))}
+                  style={rangeStyle}
+                />
+              </div>
+
+              {seed && (
+                <div style={compareContainerStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                      {compareStyle === 'all'
+                        ? `${STYLES.length} styles × ${THEMES.length} themes`
+                        : `${compareStyle} × ${THEMES.length} themes`}
+                    </div>
+                    <button onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set('mode', 'compare');
+                      params.set('seed', seed);
+                      params.set('style', compareStyle);
+                      params.set('size', size.toString());
+                      const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        setCompareCopied(true);
+                        setTimeout(() => setCompareCopied(false), 2000);
+                      });
+                    }} style={buttonStyle}>
+                      {compareCopied ? '✅ Copied!' : '🔗 Share Comparison'}
+                    </button>
+                  </div>
+
+                  {compareStyle === 'all' ? (
+                    /* All styles: matrix — styles as rows, themes as columns */
+                    <div style={compareMatrixStyle}>
+                      {/* Header row */}
+                      <div style={compareMatrixHeaderStyle}>
+                        <div style={{ ...compareMatrixCellStyle, fontWeight: 'bold', color: '#888' }}>style</div>
+                        {THEMES.map(t => (
+                          <div key={t.name} style={{ ...compareMatrixCellStyle, fontSize: '0.7rem', color: '#888' }}>
+                            <span>{t.label}</span>
+                            <span style={{ fontSize: '0.6rem' }}>{t.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Data rows: one per style */}
+                      {STYLES.map(s => (
+                        <div key={s} style={compareMatrixRowStyle}>
+                          <div style={{ ...compareMatrixCellStyle, fontSize: '0.75rem', color: '#ccc' }}>{s}</div>
+                          {THEMES.map(t => (
+                            <div key={`${s}-${t.name}`} style={compareMatrixCellStyle}>
+                              <img
+                                src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${s}&size=${Math.min(size, 128)}${t.name !== 'none' ? `&theme=${t.name}` : ''}`}
+                                alt={`${seed} ${s} ${t.name}`}
+                                width={Math.min(size, 64)}
+                                height={Math.min(size, 64)}
+                                style={{ borderRadius: 6, display: 'block' }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Single style: theme comparison row */
+                    <div>
+                      <div style={compareRowStyle}>
+                        {THEMES.map(t => (
+                          <div key={t.name} style={compareItemStyle}>
+                            <img
+                              src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${compareStyle}&size=${Math.min(size, 256)}${t.name !== 'none' ? `&theme=${t.name}` : ''}`}
+                              alt={`${seed} ${compareStyle} ${t.name}`}
+                              width={Math.min(size, 128)}
+                              height={Math.min(size, 128)}
+                              style={{ borderRadius: 8, display: 'block' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.1rem' }}>
+                              <span style={{ fontSize: '1rem' }}>{t.label}</span>
+                              <span style={compareLabelStyle}>{t.desc}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -644,6 +822,66 @@ const galleryMatrixCellStyle = {
   justifyContent: 'center',
   alignItems: 'center',
   minWidth: 0,
+};
+
+// Compare mode styles
+const compareContainerStyle = {
+  marginTop: '0.5rem',
+};
+
+const compareMatrixStyle = {
+  overflowX: 'auto',
+};
+
+const compareMatrixHeaderStyle = {
+  display: 'grid',
+  gridTemplateColumns: `80px repeat(${THEMES.length}, 1fr)`,
+  gap: '0.4rem',
+  marginBottom: '0.5rem',
+  position: 'sticky',
+  top: 0,
+  background: '#1a1a2e',
+  paddingBottom: '0.4rem',
+  borderBottom: '1px solid #333',
+};
+
+const compareMatrixRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: `80px repeat(${THEMES.length}, 1fr)`,
+  gap: '0.4rem',
+  marginBottom: '0.5rem',
+  alignItems: 'center',
+};
+
+const compareMatrixCellStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  minWidth: 0,
+};
+
+const compareRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: `repeat(${THEMES.length}, 1fr)`,
+  gap: '0.75rem',
+};
+
+const compareItemStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '0.4rem',
+  padding: '0.5rem',
+  background: '#0f0f1a',
+  borderRadius: 10,
+  border: '1px solid #222',
+};
+
+const compareLabelStyle = {
+  fontSize: '0.7rem',
+  color: '#aaa',
+  textAlign: 'center',
 };
 
 const footerStyle = {

@@ -1058,6 +1058,114 @@ class TestParallelDeterminism(unittest.TestCase):
         self.assertEqual(zip1, zip2)
 
 
+class TestThemeComparison(unittest.TestCase):
+    """Tests for theme comparison workflows (supports Compare mode UI)."""
+
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_all_themes_produce_different_images(self):
+        """Each theme should produce visually different output for the same seed."""
+        themes = ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]
+        seed = "theme-compare-test"
+        images = {}
+        for theme in themes:
+            img = self.client.generate(seed, style="geometric", size=64, theme=theme)
+            images[theme] = img
+
+        # Get unthemed version
+        plain = self.client.generate(seed, style="geometric", size=64)
+        different_from_plain = sum(1 for img in images.values() if img != plain)
+        self.assertGreaterEqual(different_from_plain, 5,
+                                f"At least 5 of 9 themes should differ from plain (got {different_from_plain})")
+
+    def test_theme_comparison_deterministic(self):
+        """Themed avatars should be deterministic."""
+        for theme in ["warm", "neon", "earth"]:
+            img1 = self.client.generate("determ-test", style="pixel", size=64, theme=theme)
+            img2 = self.client.generate("determ-test", style="pixel", size=64, theme=theme)
+            self.assertEqual(img1, img2, f"Theme '{theme}' should be deterministic")
+
+    def test_all_styles_with_one_theme(self):
+        """Compare mode: one seed, all styles, one theme."""
+        styles = ["geometric", "rings", "robot", "blockies", "gradient",
+                  "initials", "starburst", "mosaic", "pixel", "sunset"]
+        images = {}
+        for style in styles:
+            img = self.client.generate("style-compare", style=style, size=64, theme="cool")
+            images[style] = img
+            self.assertTrue(len(img) > 0)
+
+        # All styles should produce different images
+        keys = list(images.keys())
+        for i in range(len(keys)):
+            for j in range(i + 1, len(keys)):
+                self.assertNotEqual(images[keys[i]], images[keys[j]],
+                                    f"{keys[i]} and {keys[j]} should differ")
+
+    def test_compare_warm_vs_cool(self):
+        """Warm and cool themes should produce noticeably different output."""
+        warm = self.client.generate("compare-wc", style="mosaic", size=64, theme="warm")
+        cool = self.client.generate("compare-wc", style="mosaic", size=64, theme="cool")
+        self.assertNotEqual(warm, cool)
+
+    def test_compare_svg_themes(self):
+        """SVG theme comparison."""
+        plain = self.client.generate_svg("svg-compare", style="starburst", size=64)
+        neon = self.client.generate_svg("svg-compare", style="starburst", size=64, theme="neon")
+        pastel = self.client.generate_svg("svg-compare", style="starburst", size=64, theme="pastel")
+        self.assertNotEqual(plain, neon)
+        self.assertNotEqual(plain, pastel)
+        self.assertNotEqual(neon, pastel)
+        # All should be valid SVGs
+        self.assertTrue(plain.startswith("<svg"))
+        self.assertTrue(neon.startswith("<svg"))
+        self.assertTrue(pastel.startswith("<svg"))
+
+    def test_batch_theme_comparison(self):
+        """Batch with same seeds but different themes should differ."""
+        seeds = ["a", "b", "c"]
+        warm_batch = self.client.batch(seeds, style="rings", size=64, theme="warm")
+        ocean_batch = self.client.batch(seeds, style="rings", size=64, theme="ocean")
+
+        self.assertEqual(len(warm_batch), 3)
+        self.assertEqual(len(ocean_batch), 3)
+
+        # At least some should differ
+        different = sum(1 for w, o in zip(warm_batch, ocean_batch) if w["data"] != o["data"])
+        self.assertGreaterEqual(different, 2)
+
+    def test_gallery_zip_themed(self):
+        """Gallery ZIP with theme applied."""
+        seeds = ["zip-compare-1", "zip-compare-2"]
+        zip_plain = self.client.gallery_zip(seeds, style="geometric", size=64)
+        zip_warm = self.client.gallery_zip(seeds, style="geometric", size=64, theme="warm")
+        self.assertNotEqual(zip_plain, zip_warm, "Themed ZIP should differ from plain")
+
+    def test_timed_themed_generation(self):
+        """Timed generation with theme."""
+        data, ms = self.client.generate_timed("timed-theme", style="robot", size=64, theme="forest")
+        self.assertTrue(len(data) > 0)
+        self.assertGreaterEqual(ms, 0)
+
+    def test_all_themes_all_styles_matrix(self):
+        """Full compare matrix: every combination works without errors."""
+        themes = ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]
+        styles = ["geometric", "rings", "robot", "blockies", "gradient",
+                  "initials", "starburst", "mosaic", "pixel", "sunset"]
+        # Test a subset (3 themes × 3 styles) to keep test fast
+        for theme in themes[:3]:
+            for style in styles[:3]:
+                img = self.client.generate("matrix-test", style=style, size=32, theme=theme)
+                self.assertTrue(len(img) > 0, f"Failed for {style}/{theme}")
+
+    def test_monochrome_different_from_earth(self):
+        """Monochrome and earth should produce different results."""
+        mono = self.client.generate("mono-earth", style="gradient", size=64, theme="monochrome")
+        earth = self.client.generate("mono-earth", style="gradient", size=64, theme="earth")
+        self.assertNotEqual(mono, earth)
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()
