@@ -343,6 +343,146 @@ pub fn batch_generate(
     }
 }
 
+/// POST /api/v1/avatar/gallery/zip — download multiple avatars as a ZIP file
+#[post("/avatar/gallery/zip", format = "json", data = "<req>")]
+pub fn gallery_zip(
+    req: Json<GalleryZipRequest>,
+    rate: RateGuard,
+) -> RateLimited<ApiResult<ZipResponse>> {
+    let format = req.format.as_deref().unwrap_or("png");
+    if format != "png" && format != "svg" {
+        return RateLimited {
+            inner: Err((
+                Status::BadRequest,
+                Json(ApiError {
+                    error: format!("Unknown format: {format}"),
+                    detail: Some("Valid formats: png, svg".to_string()),
+                }),
+            )),
+            limit: rate.limit,
+            remaining: rate.remaining,
+        };
+    }
+
+    if req.seeds.is_empty() {
+        return RateLimited {
+            inner: Err((
+                Status::BadRequest,
+                Json(ApiError {
+                    error: "At least one seed required".to_string(),
+                    detail: None,
+                }),
+            )),
+            limit: rate.limit,
+            remaining: rate.remaining,
+        };
+    }
+
+    if req.seeds.len() > 50 {
+        return RateLimited {
+            inner: Err((
+                Status::BadRequest,
+                Json(ApiError {
+                    error: "Maximum 50 seeds per ZIP".to_string(),
+                    detail: None,
+                }),
+            )),
+            limit: rate.limit,
+            remaining: rate.remaining,
+        };
+    }
+
+    let size = req.size.unwrap_or(DEFAULT_SIZE).clamp(MIN_SIZE, MAX_SIZE);
+    let bg = parse_bg(&req.background);
+
+    // Determine which styles to include
+    let all_mode = req.style.as_deref() == Some("all");
+    let style_list: Vec<String> = if all_mode {
+        styles::available_styles()
+            .iter()
+            .map(|s| s.name.clone())
+            .collect()
+    } else {
+        let s = req.style.as_deref().unwrap_or(DEFAULT_STYLE);
+        if !styles::is_valid_style(s) {
+            return RateLimited {
+                inner: Err((
+                    Status::BadRequest,
+                    Json(ApiError {
+                        error: format!("Unknown style: {s}"),
+                        detail: Some("Valid styles: geometric, rings, robot, blockies, gradient, initials, starburst, mosaic, pixel, sunset — or 'all'".to_string()),
+                    }),
+                )),
+                limit: rate.limit,
+                remaining: rate.remaining,
+            };
+        }
+        vec![s.to_string()]
+    };
+
+    let mut zip_buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut zip_writer = zip::ZipWriter::new(&mut zip_buf);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+
+        for seed in &req.seeds {
+            for style in &style_list {
+                let filename = if all_mode {
+                    format!("{seed}_{style}.{format}")
+                } else {
+                    format!("{seed}.{format}")
+                };
+
+                let data = match format {
+                    "svg" => avatar::generate_svg(seed, style, size, bg)
+                        .map(|s| s.into_bytes()),
+                    _ => avatar::generate_png(seed, style, size, bg),
+                };
+
+                match data {
+                    Ok(bytes) => {
+                        let _ = zip_writer.start_file(&filename, options);
+                        let _ = std::io::Write::write_all(&mut zip_writer, &bytes);
+                    }
+                    Err(_) => {
+                        // Skip failed avatars silently
+                    }
+                }
+            }
+        }
+
+        let _ = zip_writer.finish();
+    }
+
+    RateLimited {
+        inner: Ok(ZipResponse {
+            bytes: zip_buf.into_inner(),
+            filename: "avatars.zip".to_string(),
+        }),
+        limit: rate.limit,
+        remaining: rate.remaining,
+    }
+}
+
+pub struct ZipResponse {
+    pub bytes: Vec<u8>,
+    pub filename: String,
+}
+
+impl<'r> Responder<'r, 'static> for ZipResponse {
+    fn respond_to(self, _req: &'r Request<'_>) -> response::Result<'static> {
+        Response::build()
+            .header(ContentType::ZIP)
+            .header(Header::new(
+                "Content-Disposition",
+                format!("attachment; filename=\"{}\"", self.filename),
+            ))
+            .sized_body(self.bytes.len(), std::io::Cursor::new(self.bytes))
+            .ok()
+    }
+}
+
 /// GET /api/v1/health
 #[get("/health")]
 pub fn health() -> Json<serde_json::Value> {
@@ -469,6 +609,15 @@ pub struct BatchItem {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GalleryZipRequest {
+    pub seeds: Vec<String>,
+    pub style: Option<String>,
+    pub size: Option<u32>,
+    pub format: Option<String>,
+    pub background: Option<String>,
+}
+
 /// Build a Rocket instance for testing.
 #[allow(dead_code)]
 pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
@@ -502,6 +651,7 @@ pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
                 generate_avatar_svg,
                 list_styles,
                 batch_generate,
+                gallery_zip,
             ],
         )
         .mount(

@@ -816,3 +816,209 @@ fn test_pixel_custom_size() {
     assert_eq!(response.status(), Status::Ok);
     assert_eq!(response.content_type().unwrap(), ContentType::PNG);
 }
+
+// ── Gallery ZIP ──
+
+#[test]
+fn test_gallery_zip_single_seed() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["nanook"]}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::ZIP));
+    let bytes = response.into_bytes().unwrap();
+    // ZIP magic bytes: PK\x03\x04
+    assert!(bytes.len() > 4);
+    assert_eq!(&bytes[..2], b"PK");
+}
+
+#[test]
+fn test_gallery_zip_multiple_seeds() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["alice","bob","charlie"],"style":"geometric"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::ZIP));
+    let bytes = response.into_bytes().unwrap();
+    // Verify it's a valid ZIP with 3 entries
+    let reader = std::io::Cursor::new(bytes);
+    let zip = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(zip.len(), 3);
+}
+
+#[test]
+fn test_gallery_zip_svg_format() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["nanook"],"format":"svg"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(zip.len(), 1);
+    // Check filename has .svg extension
+    let file = zip.by_index(0).unwrap();
+    assert!(file.name().ends_with(".svg"));
+}
+
+#[test]
+fn test_gallery_zip_all_styles() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["nanook"],"style":"all"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let zip = zip::ZipArchive::new(reader).unwrap();
+    // Should have 10 entries (one per style)
+    assert_eq!(zip.len(), 10);
+}
+
+#[test]
+fn test_gallery_zip_all_styles_filenames() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["test"],"style":"all","format":"png"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let zip = zip::ZipArchive::new(reader).unwrap();
+    let names: Vec<String> = (0..zip.len())
+        .map(|i| zip.name_for_index(i).unwrap().to_string())
+        .collect();
+    // Each file should be named seed_style.png
+    for name in &names {
+        assert!(name.starts_with("test_"), "Expected test_ prefix: {name}");
+        assert!(name.ends_with(".png"), "Expected .png suffix: {name}");
+    }
+}
+
+#[test]
+fn test_gallery_zip_with_custom_size() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["nanook"],"size":256}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    // Verify the PNG inside is a valid image close to requested size
+    let reader = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(reader).unwrap();
+    let mut file = zip.by_index(0).unwrap();
+    let mut png_bytes = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut png_bytes).unwrap();
+    let img = image::load_from_memory(&png_bytes).unwrap();
+    // Size may be slightly adjusted by grid alignment
+    assert!(img.width() >= 250 && img.width() <= 260, "width {} out of range", img.width());
+    assert!(img.height() >= 250 && img.height() <= 260, "height {} out of range", img.height());
+}
+
+#[test]
+fn test_gallery_zip_with_background() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["nanook"],"background":"ff0000"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::ZIP));
+}
+
+#[test]
+fn test_gallery_zip_empty_seeds_error() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":[]}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[test]
+fn test_gallery_zip_invalid_style_error() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["test"],"style":"nonexistent"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[test]
+fn test_gallery_zip_invalid_format_error() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["test"],"format":"gif"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[test]
+fn test_gallery_zip_content_disposition() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["test"]}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let cd = response.headers().get_one("Content-Disposition").unwrap();
+    assert!(cd.contains("avatars.zip"));
+}
+
+#[test]
+fn test_gallery_zip_deterministic() {
+    let client = client();
+    let body = r#"{"seeds":["alice","bob"],"style":"robot"}"#;
+    let r1 = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body)
+        .dispatch();
+    let bytes1 = r1.into_bytes().unwrap();
+    let r2 = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body)
+        .dispatch();
+    let bytes2 = r2.into_bytes().unwrap();
+    assert_eq!(bytes1, bytes2, "ZIP should be deterministic for same input");
+}
+
+#[test]
+fn test_gallery_zip_multi_seed_all_styles() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["alice","bob"],"style":"all"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let zip = zip::ZipArchive::new(reader).unwrap();
+    // 2 seeds × 10 styles = 20 entries
+    assert_eq!(zip.len(), 20);
+}

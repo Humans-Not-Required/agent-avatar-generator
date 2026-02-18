@@ -681,6 +681,104 @@ class TestRobotHeadShapes(unittest.TestCase):
         self.assertEqual(svg1, svg2)
 
 
+class TestGalleryZip(unittest.TestCase):
+    """Tests for gallery ZIP download."""
+
+    def setUp(self):
+        self.client = AvatarService(os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000"))
+
+    def test_gallery_zip_single_seed(self):
+        """Download ZIP with a single seed."""
+        data = self.client.gallery_zip(["nanook"])
+        self.assertIsInstance(data, bytes)
+        self.assertTrue(len(data) > 0)
+        # ZIP magic bytes
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_multiple_seeds(self):
+        """Download ZIP with multiple seeds."""
+        data = self.client.gallery_zip(["alice", "bob", "charlie"])
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_svg_format(self):
+        """Download ZIP with SVG format."""
+        data = self.client.gallery_zip(["nanook"], fmt="svg")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_all_styles(self):
+        """Download ZIP with all styles."""
+        data = self.client.gallery_zip(["nanook"], style="all")
+        self.assertIsInstance(data, bytes)
+        self.assertTrue(len(data) > 1000)  # Should be larger with all styles
+
+    def test_gallery_zip_custom_style(self):
+        """Download ZIP with specific style."""
+        data = self.client.gallery_zip(["test"], style="robot")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_custom_size(self):
+        """Download ZIP with custom size."""
+        data = self.client.gallery_zip(["test"], size=512)
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_with_background(self):
+        """Download ZIP with background color."""
+        data = self.client.gallery_zip(["test"], background="ff0000")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_gallery_zip_save(self):
+        """Save gallery ZIP to file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as f:
+            path = f.name
+        try:
+            result = self.client.gallery_zip_save(["alice", "bob"], path)
+            self.assertEqual(result, path)
+            self.assertTrue(os.path.exists(path))
+            self.assertTrue(os.path.getsize(path) > 0)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_gallery_zip_deterministic(self):
+        """Same inputs produce same ZIP."""
+        data1 = self.client.gallery_zip(["alice", "bob"], style="rings")
+        data2 = self.client.gallery_zip(["alice", "bob"], style="rings")
+        self.assertEqual(data1, data2)
+
+    def test_gallery_zip_empty_seeds_error(self):
+        """Empty seeds list raises error."""
+        with self.assertRaises(ValidationError):
+            self.client.gallery_zip([])
+
+    def test_gallery_zip_invalid_style_error(self):
+        """Invalid style raises error."""
+        with self.assertRaises(ValidationError):
+            self.client.gallery_zip(["test"], style="nonexistent")
+
+    def test_gallery_zip_invalid_format_error(self):
+        """Invalid format raises error."""
+        with self.assertRaises(ValidationError):
+            self.client.gallery_zip(["test"], fmt="gif")
+
+    def test_gallery_zip_all_styles_larger_than_single(self):
+        """All styles produces larger ZIP than single style."""
+        single = self.client.gallery_zip(["test"], style="geometric")
+        all_styles = self.client.gallery_zip(["test"], style="all")
+        self.assertGreater(len(all_styles), len(single))
+
+    def test_gallery_zip_svg_all_styles(self):
+        """SVG format works with all styles."""
+        data = self.client.gallery_zip(["test"], style="all", fmt="svg")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()

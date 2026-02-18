@@ -37,6 +37,16 @@ Content-Type: application/json
 GET /api/v1/styles
 ```
 
+### Gallery ZIP Download
+```
+POST /api/v1/avatar/gallery/zip
+Content-Type: application/json
+
+{"seeds": ["agent-1", "agent-2"], "style": "all", "size": 256, "format": "png"}
+```
+
+**Response:** ZIP file containing avatar images. Use `style: "all"` to include every style for each seed. Max 50 seeds.
+
 ### Health Check
 ```
 GET /api/v1/health

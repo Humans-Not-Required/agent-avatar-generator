@@ -46,7 +46,7 @@ class ServerError(AvatarServiceError):
 class AvatarService:
     """Client for the Agent Avatar Generator API."""
 
-    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"}
+    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"}
     VALID_FORMATS = {"png", "svg"}
 
     def __init__(self, base_url=None, timeout=30):
@@ -121,6 +121,44 @@ class AvatarService:
             body["background"] = background
         data, status, headers = self._request("POST", "/api/v1/avatar/batch", body=body)
         return data["avatars"]
+
+    def gallery_zip(self, seeds, style="geometric", size=256, fmt="png", background=None):
+        """Download multiple avatars as a ZIP file. Returns bytes.
+
+        Args:
+            seeds: List of seed strings (max 50).
+            style: Avatar style or "all" for all styles.
+            size: Avatar size in pixels.
+            fmt: "png" or "svg".
+            background: Optional hex color (e.g. "ff0000").
+
+        Returns:
+            bytes: ZIP file contents.
+        """
+        body = {"seeds": seeds, "style": style, "size": size, "format": fmt}
+        if background:
+            body["background"] = background
+        data, status, headers = self._request("POST", "/api/v1/avatar/gallery/zip", body=body)
+        return data
+
+    def gallery_zip_save(self, seeds, path, style="geometric", size=256, fmt="png", background=None):
+        """Download gallery ZIP and save to file.
+
+        Args:
+            seeds: List of seed strings.
+            path: Output file path.
+            style: Avatar style or "all".
+            size: Avatar size.
+            fmt: "png" or "svg".
+            background: Optional hex color.
+
+        Returns:
+            str: Path to saved file.
+        """
+        data = self.gallery_zip(seeds, style=style, size=size, fmt=fmt, background=background)
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
 
     def styles(self):
         """List available styles."""

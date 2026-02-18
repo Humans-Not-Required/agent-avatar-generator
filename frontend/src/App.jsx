@@ -13,6 +13,7 @@ function App() {
   const [format, setFormat] = useState('png');
   const [copied, setCopied] = useState(false);
   const [galleryStyle, setGalleryStyle] = useState('all');
+  const [downloading, setDownloading] = useState(false);
 
   const gallerySeeds = galleryText
     .split('\n')
@@ -23,6 +24,37 @@ function App() {
   const avatarUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=png`;
   const downloadUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}`;
   const shareUrl = `${API_BASE}/avatar/view/${encodeURIComponent(seed)}?style=${style}&size=${size}`;
+
+  const downloadZip = async () => {
+    if (gallerySeeds.length === 0) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/avatar/gallery/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seeds: gallerySeeds,
+          style: galleryStyle,
+          size,
+          format,
+        }),
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'avatars.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('ZIP download failed:', e);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const copyShareUrl = () => {
     navigator.clipboard.writeText(shareUrl).then(() => {
@@ -217,9 +249,14 @@ function App() {
 
               {gallerySeeds.length > 0 && (
                 <div style={galleryContainerStyle}>
-                  <div style={{ ...gallerySeedCountStyle }}>
-                    {gallerySeeds.length} avatar{gallerySeeds.length !== 1 ? 's' : ''}
-                    {galleryStyle === 'all' ? ` × ${STYLES.length} styles` : ''}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={gallerySeedCountStyle}>
+                      {gallerySeeds.length} avatar{gallerySeeds.length !== 1 ? 's' : ''}
+                      {galleryStyle === 'all' ? ` × ${STYLES.length} styles` : ''}
+                    </div>
+                    <button onClick={downloadZip} disabled={downloading} style={buttonStyle}>
+                      {downloading ? '⏳ Zipping...' : '📦 Download ZIP'}
+                    </button>
                   </div>
 
                   {galleryStyle === 'all' ? (

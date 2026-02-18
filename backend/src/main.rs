@@ -44,6 +44,7 @@ fn rocket() -> _ {
                 routes::generate_avatar_svg,
                 routes::list_styles,
                 routes::batch_generate,
+                routes::gallery_zip,
             ],
         )
         .mount(

@@ -28,6 +28,14 @@ POST /api/v1/avatar/batch
 - Returns: JSON with base64-encoded images
 - Max 50 seeds per request
 
+### Gallery ZIP Download
+POST /api/v1/avatar/gallery/zip
+- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 256, "format": "png"}
+- Use style: "all" to include every style for each seed
+- Returns: application/zip with avatar files
+- Max 50 seeds per request
+- Filenames: {seed}.{format} or {seed}_{style}.{format} (when style="all")
+
 ### Health
 GET /api/v1/health
 - Returns: {"status": "ok", "service": "agent-avatar-generator", "version": "..."}

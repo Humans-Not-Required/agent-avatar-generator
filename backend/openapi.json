@@ -54,6 +54,35 @@
         }
       }
     },
+    "/avatar/gallery/zip": {
+      "post": {
+        "summary": "Download gallery as ZIP",
+        "description": "Generate multiple avatars and download as a ZIP file. Use style='all' to include every style.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["seeds"],
+                "properties": {
+                  "seeds": { "type": "array", "items": { "type": "string" }, "maxItems": 50 },
+                  "style": { "type": "string", "default": "geometric", "description": "Style name or 'all' for every style" },
+                  "size": { "type": "integer", "default": 256, "minimum": 16, "maximum": 1024 },
+                  "format": { "type": "string", "enum": ["png", "svg"], "default": "png" },
+                  "background": { "type": "string", "description": "Hex color (e.g. ff0000)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ZIP file containing avatar images", "content": { "application/zip": {} } },
+          "400": { "description": "Invalid parameters" },
+          "429": { "description": "Rate limit exceeded" }
+        }
+      }
+    },
     "/styles": {
       "get": {
         "summary": "List available styles",
