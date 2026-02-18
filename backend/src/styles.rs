@@ -49,11 +49,16 @@ pub fn available_styles() -> Vec<StyleInfo> {
             description: "6×6 grid of shapes with harmonious color palette (complementary/triadic/analogous).".to_string(),
             sample_seed: "nanook".to_string(),
         },
+        StyleInfo {
+            name: "pixel".to_string(),
+            description: "Retro pixel art creatures with horizontal symmetry. Space-invader inspired.".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
     ]
 }
 
 pub fn is_valid_style(style: &str) -> bool {
-    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic")
+    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic" | "pixel")
 }
 
 pub const DEFAULT_STYLE: &str = "geometric";

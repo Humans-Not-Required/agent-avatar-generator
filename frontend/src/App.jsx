@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic'];
+const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel'];
 const API_BASE = window.location.origin;
 const DEFAULT_GALLERY_SEEDS = 'nanook\nforge\ndrift\nlux\ngerundium\nsmoltbot\nclawrecipes\nagent-42';
 
@@ -480,7 +480,7 @@ const galleryMatrixStyle = {
 
 const galleryMatrixHeaderStyle = {
   display: 'grid',
-  gridTemplateColumns: '100px repeat(8, 1fr)',
+  gridTemplateColumns: `100px repeat(${STYLES.length}, 1fr)`,
   gap: '0.4rem',
   marginBottom: '0.5rem',
   position: 'sticky',
@@ -492,7 +492,7 @@ const galleryMatrixHeaderStyle = {
 
 const galleryMatrixRowStyle = {
   display: 'grid',
-  gridTemplateColumns: '100px repeat(8, 1fr)',
+  gridTemplateColumns: `100px repeat(${STYLES.length}, 1fr)`,
   gap: '0.4rem',
   marginBottom: '0.5rem',
   alignItems: 'center',

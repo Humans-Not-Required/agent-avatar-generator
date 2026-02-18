@@ -14,7 +14,7 @@ Generate with style: GET /api/v1/avatar/{seed}?style=robot&size=256
 
 ### Generate Avatar
 GET /api/v1/avatar/{seed}
-- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst), size (16-1024), format (png|svg), background (hex)
+- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst|mosaic|pixel), size (16-1024), format (png|svg), background (hex)
 - Returns: image/png or image/svg+xml
 - No auth required
 
@@ -40,6 +40,8 @@ GET /api/v1/health
 - gradient: Two-color gradient with geometric overlay
 - initials: 1-2 letter initials on colored background
 - starburst: Radial rays from center with fading edges
+- mosaic: 6×6 grid of shapes with harmonious color palette
+- pixel: Retro pixel art creatures with horizontal symmetry (space-invader inspired)
 
 ## Key Properties
 - Deterministic: same seed → same avatar, always

@@ -1,8 +1,8 @@
 # Agent Avatar Generator - Status
 
-## Current State: 8 Styles, Gallery View, 136 Tests ✅
+## Current State: 9 Styles, Gallery View, Pixel Art ✅
 
-Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, zero clippy warnings, CI configured.
+Self-hosted deterministic avatar generation service with 9 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, zero clippy warnings, CI configured.
 
 ### What's Done
 
@@ -11,7 +11,7 @@ Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG outpu
   - `GET /api/v1/styles` — List all available styles
   - `POST /api/v1/avatar/batch` — Batch generate up to 50 avatars
   - `GET /avatar/view/{seed}` — Share URL with preview page
-- **8 Avatar Styles:**
+- **9 Avatar Styles:**
   - `geometric` — 5×5 vertically symmetric grid identicon (default)
   - `rings` — Concentric colored rings
   - `robot` — Procedural robot faces with ears, visor, forehead marking, cheek bolts, chin plate (864+ unique combos)
@@ -20,6 +20,7 @@ Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG outpu
   - `initials` — 1-2 letter initials on colored background (embedded 5×7 bitmap font for PNG, native text for SVG)
   - `starburst` — Radial rays from center with variable ray count, 3-color palette, edge fading, center dot
   - `mosaic` — 6×6 grid of geometric shapes with harmonious color palettes (complementary/triadic/analogous/split-complementary)
+  - `pixel` — Retro pixel art creatures with horizontal symmetry, 11×11 grid, 3-color palette, visible pixel gaps (space-invader inspired)
 - **Output Formats:** PNG + SVG for all styles
 - **Deterministic:** Same seed → identical output, always. SHA-256 hashing.
 - **Rate Limiting:** 200 req/min per IP with headers
@@ -27,7 +28,7 @@ Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG outpu
 - **Frontend:** React + Vite SPA
   - **Single mode:** Live preview as you type, style selector, size slider, format toggle, download + copy share URL
   - **Gallery mode:** Enter multiple seeds (one per line, max 50), view as grid or matrix
-    - "All" style option: seed × style matrix showing all 8 styles per seed
+    - "All" style option: seed × style matrix showing all 9 styles per seed
     - Single style: responsive grid with seed labels
   - Dark theme matching HNR design system
 - **Color Harmony System:**
@@ -37,8 +38,8 @@ Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG outpu
 - **Discovery:** `/api/v1/openapi.json`, `/llms.txt`, `/.well-known/skills/agent-avatar-generator/SKILL.md`
 - **Docker:** Multi-stage build, single port
 - **CI/CD:** GitHub Actions → ghcr.io + Watchtower auto-deploy
-- **Tests:** 62 Rust (33 unit + 29 HTTP integration), zero clippy warnings
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 74 integration tests.
+- **Tests:** 69 Rust (42 unit + 27 HTTP integration via separate targets), zero clippy warnings
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 85 integration tests.
 
 ### Tech Stack
 
@@ -52,10 +53,9 @@ Self-hosted deterministic avatar generation service with 8 styles, PNG/SVG outpu
 
 ### What's Next
 
-- Consider adding more styles (pixel art, abstract shapes)
+- More robot head shapes (dome, hexagonal), accessories
 - Performance optimization for large batch requests
 - Add color harmony option to existing styles (gradient, rings)
-- Improve robot face: more head shapes (dome, hexagonal), accessories
 - Gallery: download all as ZIP, share gallery URL
 
 ### ⚠️ Gotchas

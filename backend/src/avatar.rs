@@ -793,6 +793,82 @@ pub fn generate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8
     img
 }
 
+/// Generate a pixel art creature avatar (space-invader inspired, horizontal symmetry).
+pub fn generate_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let color1 = color_from_hash(&hash, 0);
+    let color2 = color_from_hash(&hash, 3);
+    let color3 = color_from_hash(&hash, 6);
+    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+
+    // 11×11 grid with horizontal symmetry (odd for center column)
+    let grid = 11u32;
+    let half = grid / 2 + 1; // 6 columns to compute (including center)
+
+    // Cell size with padding around the creature
+    let cell = size / (grid + 2);
+    let offset = (size - cell * grid) / 2;
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    // Gap between pixels for retro look (1px minimum, ~10% of cell)
+    let gap = (cell / 10).clamp(1, 3);
+
+    let colors = [color1, color2, color3];
+
+    for row in 0..grid {
+        for col in 0..half {
+            let idx = (row * half + col) as usize;
+            let byte = hash[idx % 32];
+
+            // Shape probability: center columns and middle rows more likely filled
+            let col_dist = (half as i32 - 1 - col as i32).unsigned_abs();
+            let row_center = grid / 2;
+            let row_dist = row.abs_diff(row_center);
+
+            // Base threshold — lower means more likely to be filled
+            // Center is ~80, edges ~140, top/bottom rows add penalty
+            let threshold = 80 + col_dist * 14 + row_dist * 8;
+
+            if (byte as u32) > threshold {
+                // Pick color deterministically
+                let color_byte = hash[(idx * 3 + 11) % 32];
+                let color = colors[(color_byte as usize) % 3];
+
+                // Draw this cell with gap
+                let x = offset + col * cell;
+                let y = offset + row * cell;
+                fill_rect(
+                    &mut img,
+                    x + gap,
+                    y + gap,
+                    x + cell - gap,
+                    y + cell - gap,
+                    color,
+                );
+
+                // Mirror horizontally (skip if this IS the center column)
+                if col < grid / 2 {
+                    let mx = offset + (grid - 1 - col) * cell;
+                    fill_rect(
+                        &mut img,
+                        mx + gap,
+                        y + gap,
+                        mx + cell - gap,
+                        y + cell - gap,
+                        color,
+                    );
+                }
+            }
+        }
+    }
+
+    img
+}
+
 /// Generate an avatar as PNG bytes.
 pub fn generate_png(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>) -> Result<Vec<u8>, String> {
     let img = generate_image(seed, style, size, bg)?;
@@ -814,6 +890,7 @@ pub fn generate_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>
         "initials" => Ok(svg_initials(seed, size, bg)),
         "starburst" => Ok(svg_starburst(seed, size, bg)),
         "mosaic" => Ok(svg_mosaic(seed, size, bg)),
+        "pixel" => Ok(svg_pixel(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -829,6 +906,7 @@ pub fn generate_image(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8
         "initials" => Ok(generate_initials(seed, size, bg)),
         "starburst" => Ok(generate_starburst(seed, size, bg)),
         "mosaic" => Ok(generate_mosaic(seed, size, bg)),
+        "pixel" => Ok(generate_pixel(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -1466,6 +1544,62 @@ fn svg_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Strin
     )
 }
 
+fn svg_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let color1 = color_from_hash(&hash, 0);
+    let color2 = color_from_hash(&hash, 3);
+    let color3 = color_from_hash(&hash, 6);
+    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+
+    let grid = 11u32;
+    let half = grid / 2 + 1;
+    let cell = size / (grid + 2);
+    let offset = (size - cell * grid) / 2;
+    let gap = (cell / 10).clamp(1, 3);
+    let pixel_size = cell - gap * 2;
+
+    let colors = [color1, color2, color3];
+    let mut rects = String::new();
+
+    for row in 0..grid {
+        for col in 0..half {
+            let idx = (row * half + col) as usize;
+            let byte = hash[idx % 32];
+
+            let col_dist = (half as i32 - 1 - col as i32).unsigned_abs();
+            let row_center = grid / 2;
+            let row_dist = row.abs_diff(row_center);
+
+            let threshold = 80 + col_dist * 14 + row_dist * 8;
+
+            if (byte as u32) > threshold {
+                let color_byte = hash[(idx * 3 + 11) % 32];
+                let color = colors[(color_byte as usize) % 3];
+                let hex = hex_color(color);
+
+                let x = offset + col * cell + gap;
+                let y = offset + row * cell + gap;
+                rects.push_str(&format!(
+                    r#"<rect x="{x}" y="{y}" width="{pixel_size}" height="{pixel_size}" fill="{hex}"/>"#,
+                ));
+
+                // Mirror
+                if col < grid / 2 {
+                    let mx = offset + (grid - 1 - col) * cell + gap;
+                    rects.push_str(&format!(
+                        r#"<rect x="{mx}" y="{y}" width="{pixel_size}" height="{pixel_size}" fill="{hex}"/>"#,
+                    ));
+                }
+            }
+        }
+    }
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><rect width="{size}" height="{size}" fill="{bg}"/>{rects}</svg>"#,
+        bg = hex_color(bg),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1486,7 +1620,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_png() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"] {
             let result = generate_png("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid PNG");
             assert!(!result.unwrap().is_empty(), "Style {style} PNG should not be empty");
@@ -1495,7 +1629,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_svg() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"] {
             let result = generate_svg("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid SVG");
             let svg = result.unwrap();
@@ -1698,6 +1832,88 @@ mod tests {
     #[test]
     fn test_starburst_small_size() {
         let result = generate_png("star", "starburst", 16, None);
+        assert!(result.is_ok());
+    }
+
+    // ── Pixel art style tests ──
+
+    #[test]
+    fn test_pixel_deterministic() {
+        let img1 = generate_png("creature", "pixel", 256, None).unwrap();
+        let img2 = generate_png("creature", "pixel", 256, None).unwrap();
+        assert_eq!(img1, img2);
+    }
+
+    #[test]
+    fn test_pixel_different_seeds() {
+        let img1 = generate_png("invader-a", "pixel", 128, None).unwrap();
+        let img2 = generate_png("invader-b", "pixel", 128, None).unwrap();
+        assert_ne!(img1, img2);
+    }
+
+    #[test]
+    fn test_pixel_svg_has_rects() {
+        let svg = generate_svg("creature", "pixel", 256, None).unwrap();
+        assert!(svg.contains("<rect"), "Pixel SVG should contain rect elements");
+        assert!(svg.contains("<svg"), "Should be valid SVG");
+    }
+
+    #[test]
+    fn test_pixel_bg_override() {
+        let with = generate_png("test", "pixel", 128, Some((255, 0, 0))).unwrap();
+        let without = generate_png("test", "pixel", 128, None).unwrap();
+        assert_ne!(with, without);
+    }
+
+    #[test]
+    fn test_pixel_small_size() {
+        let result = generate_png("tiny", "pixel", 16, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pixel_large_size() {
+        let result = generate_png("big", "pixel", 512, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pixel_horizontal_symmetry() {
+        // Verify the pixel art has horizontal symmetry by checking the generated image
+        let img = generate_pixel("symmetry-test", 256, None);
+        let grid = 11u32;
+        let cell = 256 / (grid + 2);
+        let offset = (256 - cell * grid) / 2;
+        let mid = offset + cell * grid / 2; // center x
+
+        // Sample several rows at cell centers and check left-right mirror
+        for row in 0..grid {
+            let y = offset + row * cell + cell / 2;
+            if y >= 256 { continue; }
+            for col in 0..(grid / 2) {
+                let lx = offset + col * cell + cell / 2;
+                let rx = offset + (grid - 1 - col) * cell + cell / 2;
+                if lx >= 256 || rx >= 256 { continue; }
+                let left_pixel = img.get_pixel(lx, y);
+                let right_pixel = img.get_pixel(rx, y);
+                assert_eq!(
+                    left_pixel, right_pixel,
+                    "Pixel at ({lx},{y}) should mirror ({rx},{y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pixel_svg_deterministic() {
+        let svg1 = generate_svg("pixel-test", "pixel", 256, None).unwrap();
+        let svg2 = generate_svg("pixel-test", "pixel", 256, None).unwrap();
+        assert_eq!(svg1, svg2);
+    }
+
+    #[test]
+    fn test_pixel_unicode_seed() {
+        let result = generate_png("🎮👾", "pixel", 128, None);
         assert!(result.is_ok());
     }
 

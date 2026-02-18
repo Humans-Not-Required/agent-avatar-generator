@@ -275,7 +275,7 @@ fn test_list_styles() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let styles = body.as_array().unwrap();
-    assert_eq!(styles.len(), 8);
+    assert_eq!(styles.len(), 9);
     let names: Vec<&str> = styles.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"geometric"));
     assert!(names.contains(&"rings"));
@@ -284,6 +284,8 @@ fn test_list_styles() {
     assert!(names.contains(&"gradient"));
     assert!(names.contains(&"initials"));
     assert!(names.contains(&"starburst"));
+    assert!(names.contains(&"mosaic"));
+    assert!(names.contains(&"pixel"));
 }
 
 // ── Discovery ──
@@ -742,4 +744,75 @@ fn test_mosaic_small() {
     let client = client();
     let response = client.get("/api/v1/avatar/tiny-mosaic?style=mosaic&size=16").dispatch();
     assert_eq!(response.status(), Status::Ok);
+}
+
+// ── Pixel Art Style ──
+
+#[test]
+fn test_pixel_png() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/invader?style=pixel&size=256").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type().unwrap(), ContentType::PNG);
+    let bytes = response.into_bytes().unwrap();
+    assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn test_pixel_svg() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/invader?style=pixel&size=256&format=svg").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type().unwrap(), ContentType::SVG);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("<svg"));
+    assert!(body.contains("<rect")); // Should have pixel rects
+}
+
+#[test]
+fn test_pixel_deterministic_http() {
+    let client = client();
+    let r1 = client.get("/api/v1/avatar/creature?style=pixel&size=128").dispatch().into_bytes().unwrap();
+    let r2 = client.get("/api/v1/avatar/creature?style=pixel&size=128").dispatch().into_bytes().unwrap();
+    assert_eq!(r1, r2);
+}
+
+#[test]
+fn test_pixel_with_bg() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/alien?style=pixel&background=000033").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}
+
+#[test]
+fn test_pixel_batch() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["inv1", "inv2", "inv3"], "style": "pixel", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 3);
+    // All should be unique
+    let data: Vec<&str> = avatars.iter().map(|a| a["data"].as_str().unwrap()).collect();
+    let unique: std::collections::HashSet<&str> = data.iter().copied().collect();
+    assert_eq!(unique.len(), 3, "Not all pixel avatars are unique");
+}
+
+#[test]
+fn test_pixel_small() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/tiny-pixel?style=pixel&size=16").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}
+
+#[test]
+fn test_pixel_custom_size() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/big-pixel?style=pixel&size=512").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type().unwrap(), ContentType::PNG);
 }

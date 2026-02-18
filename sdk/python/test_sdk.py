@@ -106,13 +106,13 @@ class TestStyles(unittest.TestCase):
         self.client = AvatarService()
 
     def test_all_styles_png(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"]:
             data = self.client.generate("test", style=style)
             self.assertIsInstance(data, bytes, f"Style {style} should return bytes")
             self.assertTrue(len(data) > 0, f"Style {style} should return non-empty")
 
     def test_all_styles_svg(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"]:
             data = self.client.generate_svg("test", style=style)
             self.assertIsInstance(data, str, f"Style {style} SVG should return string")
             self.assertTrue(data.startswith("<svg"), f"Style {style} SVG should start with <svg")
@@ -120,7 +120,7 @@ class TestStyles(unittest.TestCase):
     def test_list_styles(self):
         styles = self.client.styles()
         self.assertIsInstance(styles, list)
-        self.assertEqual(len(styles), 8)
+        self.assertEqual(len(styles), 9)
         names = [s["name"] for s in styles]
         self.assertIn("geometric", names)
         self.assertIn("rings", names)
@@ -129,6 +129,8 @@ class TestStyles(unittest.TestCase):
         self.assertIn("gradient", names)
         self.assertIn("initials", names)
         self.assertIn("starburst", names)
+        self.assertIn("mosaic", names)
+        self.assertIn("pixel", names)
 
     def test_styles_have_description(self):
         styles = self.client.styles()
@@ -437,6 +439,65 @@ class TestMosaicStyle(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=True) as f:
             self.client.save("mosaic-save", f.name, style="mosaic", size=64, fmt="svg")
             self.assertTrue(os.path.getsize(f.name) > 0)
+
+
+class TestPixelStyle(unittest.TestCase):
+    def setUp(self):
+        url = os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        self.client = AvatarService(url)
+
+    def test_pixel_png(self):
+        data = self.client.generate_png("invader", style="pixel")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_pixel_svg(self):
+        svg = self.client.generate_svg("invader", style="pixel")
+        self.assertIn("<svg", svg)
+        self.assertIn("<rect", svg)  # Should have pixel rects
+
+    def test_pixel_deterministic(self):
+        a = self.client.generate("creature", style="pixel", size=128)
+        b = self.client.generate("creature", style="pixel", size=128)
+        self.assertEqual(a, b)
+
+    def test_pixel_different_seeds(self):
+        a = self.client.generate("alien-a", style="pixel", size=64)
+        b = self.client.generate("alien-b", style="pixel", size=64)
+        self.assertNotEqual(a, b)
+
+    def test_pixel_multiple_sizes(self):
+        for sz in [16, 64, 128, 256, 512]:
+            data = self.client.generate("pixel-sz", style="pixel", size=sz)
+            self.assertTrue(len(data) > 0, f"Empty at size {sz}")
+
+    def test_pixel_with_bg(self):
+        data = self.client.generate("pixel-bg", style="pixel", background="000033")
+        self.assertIsInstance(data, bytes)
+
+    def test_pixel_batch(self):
+        results = self.client.batch(["inv1", "inv2", "inv3"], style="pixel", size=64)
+        self.assertEqual(len(results), 3)
+        for item in results:
+            self.assertIsNone(item.get("error"))
+
+    def test_pixel_save_png(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as f:
+            self.client.save("pixel-save", f.name, style="pixel", size=64)
+            self.assertTrue(os.path.getsize(f.name) > 0)
+
+    def test_pixel_save_svg(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=True) as f:
+            self.client.save("pixel-save", f.name, style="pixel", size=64, fmt="svg")
+            self.assertTrue(os.path.getsize(f.name) > 0)
+
+    def test_pixel_batch_svg(self):
+        results = self.client.batch(["p1", "p2"], style="pixel", fmt="svg")
+        self.assertEqual(len(results), 2)
+        for item in results:
+            decoded = base64.b64decode(item["data"]).decode("utf-8")
+            self.assertIn("<rect", decoded)
 
 
 class TestConstructor(unittest.TestCase):

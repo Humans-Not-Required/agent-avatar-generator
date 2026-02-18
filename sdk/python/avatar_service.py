@@ -46,7 +46,7 @@ class ServerError(AvatarServiceError):
 class AvatarService:
     """Client for the Agent Avatar Generator API."""
 
-    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"}
+    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"}
     VALID_FORMATS = {"png", "svg"}
 
     def __init__(self, base_url=None, timeout=30):
