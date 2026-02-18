@@ -90,7 +90,7 @@ class TestGenerate(unittest.TestCase):
 
     def test_invalid_format(self):
         with self.assertRaises(ValidationError):
-            self.client.generate("test", fmt="gif")
+            self.client.generate("test", fmt="bmp")
 
     def test_special_chars_in_seed(self):
         data = self.client.generate("nanook@claw.inc")
@@ -879,7 +879,7 @@ class TestGalleryZip(unittest.TestCase):
     def test_gallery_zip_invalid_format_error(self):
         """Invalid format raises error."""
         with self.assertRaises(ValidationError):
-            self.client.gallery_zip(["test"], fmt="gif")
+            self.client.gallery_zip(["test"], fmt="bmp")
 
     def test_gallery_zip_all_styles_larger_than_single(self):
         """All styles produces larger ZIP than single style."""
