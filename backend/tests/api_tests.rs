@@ -591,3 +591,92 @@ fn test_starburst_batch() {
         assert!(a["error"].is_null());
     }
 }
+
+// ── Robot Variations ──
+
+#[test]
+fn test_robot_many_seeds_png() {
+    // Generate robot avatars for many seeds to exercise all ear/visor/forehead/chin variants
+    let client = client();
+    let seeds = vec![
+        "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+        "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi",
+        "rho", "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega",
+    ];
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{}?style=robot&size=128", seed);
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {}", seed);
+        assert_eq!(response.content_type().unwrap(), ContentType::PNG);
+        let bytes = response.into_bytes().unwrap();
+        assert!(bytes.len() > 100, "Robot PNG too small for seed: {}", seed);
+    }
+}
+
+#[test]
+fn test_robot_many_seeds_svg() {
+    // Generate robot SVGs for many seeds to exercise all feature variants
+    let client = client();
+    let seeds = vec![
+        "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+        "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi",
+    ];
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{}?style=robot&size=128&format=svg", seed);
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {}", seed);
+        let body = response.into_string().unwrap();
+        assert!(body.contains("<svg"), "No SVG tag for seed: {}", seed);
+        assert!(body.contains("</svg>"), "Unclosed SVG for seed: {}", seed);
+    }
+}
+
+#[test]
+fn test_robot_deterministic_features() {
+    // Same seed should produce identical robot avatar bytes
+    let client = client();
+    let response1 = client.get("/api/v1/avatar/robot-test-42?style=robot&size=256").dispatch();
+    let bytes1 = response1.into_bytes().unwrap();
+    let response2 = client.get("/api/v1/avatar/robot-test-42?style=robot&size=256").dispatch();
+    let bytes2 = response2.into_bytes().unwrap();
+    assert_eq!(bytes1, bytes2, "Robot avatar not deterministic");
+}
+
+#[test]
+fn test_robot_batch_variety() {
+    // Batch generate robots and verify they're all different
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["robot-a", "robot-b", "robot-c", "robot-d", "robot-e"], "style": "robot", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 5);
+    // Collect base64 data and verify they're unique
+    let data: Vec<&str> = avatars.iter().map(|a| a["data"].as_str().unwrap()).collect();
+    let unique: std::collections::HashSet<&str> = data.iter().copied().collect();
+    assert_eq!(unique.len(), 5, "Not all robot avatars are unique");
+}
+
+#[test]
+fn test_robot_small_size() {
+    // Robot should render even at very small sizes without panicking
+    let client = client();
+    let response = client.get("/api/v1/avatar/tiny-robot?style=robot&size=16").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    assert!(bytes.len() > 50, "Robot PNG too small at 16px");
+}
+
+#[test]
+fn test_robot_large_size() {
+    // Robot should render at max size
+    let client = client();
+    let response = client.get("/api/v1/avatar/big-robot?style=robot&size=512").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    assert!(bytes.len() > 1000, "Robot PNG too small at 512px");
+}

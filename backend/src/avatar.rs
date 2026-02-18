@@ -113,6 +113,7 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     let hash = hash_seed(seed);
     let body_color = color_from_hash(&hash, 0);
     let eye_color = color_from_hash(&hash, 3);
+    let accent_color = color_from_hash(&hash, 12);
     let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
@@ -130,6 +131,39 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     let head_top = (s * 0.2) as u32;
     let head_bottom = (s * 0.7) as u32;
     fill_rect(&mut img, head_left, head_top, head_right, head_bottom, body_color);
+
+    // Ears (drawn after head so they layer properly)
+    let ear_style = hash[12] % 4;
+    let ear_w = (s * 0.06) as u32;
+    let ear_h = (s * 0.12) as u32;
+    let ear_y = (s * 0.35) as u32;
+    match ear_style {
+        1 => {
+            // Rectangular side ears
+            fill_rect(&mut img, head_left.saturating_sub(ear_w), ear_y, head_left, ear_y + ear_h, accent_color);
+            fill_rect(&mut img, head_right, ear_y, head_right + ear_w, ear_y + ear_h, accent_color);
+        }
+        2 => {
+            // Round disc ears
+            let er = (s * 0.05) as u32;
+            fill_circle(&mut img, head_left, ear_y + ear_h / 2, er, accent_color);
+            fill_circle(&mut img, head_right, ear_y + ear_h / 2, er, accent_color);
+        }
+        3 => {
+            // Pointed ears (triangular — approximated with stacked rects)
+            let tri_h = (s * 0.1) as u32;
+            for i in 0..tri_h {
+                let w = ear_w.saturating_sub(i * ear_w / tri_h);
+                if w > 0 {
+                    // Left ear
+                    fill_rect(&mut img, head_left.saturating_sub(w), ear_y + i, head_left, ear_y + i + 1, accent_color);
+                    // Right ear
+                    fill_rect(&mut img, head_right, ear_y + i, head_right + w, ear_y + i + 1, accent_color);
+                }
+            }
+        }
+        _ => {} // No ears
+    }
 
     // Antenna (varies based on hash)
     let antenna_style = hash[6] % 3;
@@ -156,9 +190,52 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
         }
     }
 
+    // Forehead marking
+    let forehead_style = hash[14] % 3;
+    match forehead_style {
+        1 => {
+            // LED dot on forehead
+            let led_y = (s * 0.26) as u32;
+            let led_r = (s * 0.025) as u32;
+            fill_circle(&mut img, size / 2, led_y, led_r, accent_color);
+        }
+        2 => {
+            // Horizontal stripe
+            let stripe_y = (s * 0.25) as u32;
+            let stripe_w = (s * 0.15) as u32;
+            fill_rect(&mut img, size / 2 - stripe_w, stripe_y, size / 2 + stripe_w, stripe_y + 2, accent_color);
+        }
+        _ => {} // No marking
+    }
+
+    // Visor (drawn before eyes so eyes sit on top)
+    let visor_style = hash[13] % 3;
+    let eye_y = (s * 0.38) as u32;
+    if visor_style > 0 {
+        let visor_h = (s * 0.06) as u32;
+        let visor_left = head_left + (s * 0.04) as u32;
+        let visor_right = head_right - (s * 0.04) as u32;
+        // Darken the visor area
+        let visor_color = (
+            body_color.0.saturating_sub(30),
+            body_color.1.saturating_sub(30),
+            body_color.2.saturating_sub(30),
+        );
+        if visor_style == 1 {
+            // Full band visor
+            fill_rect(&mut img, visor_left, eye_y - visor_h, visor_right, eye_y + visor_h, visor_color);
+        } else {
+            // Segmented visor (two blocks around eye positions)
+            let seg_w = (s * 0.14) as u32;
+            let left_eye_x = (s * 0.35) as u32;
+            let right_eye_x = (s * 0.65) as u32;
+            fill_rect(&mut img, left_eye_x - seg_w, eye_y - visor_h, left_eye_x + seg_w, eye_y + visor_h, visor_color);
+            fill_rect(&mut img, right_eye_x - seg_w, eye_y - visor_h, right_eye_x + seg_w, eye_y + visor_h, visor_color);
+        }
+    }
+
     // Eyes
     let eye_size = (s * 0.08) as u32;
-    let eye_y = (s * 0.38) as u32;
     let eye_shape = hash[7] % 3;
     let left_eye_x = (s * 0.35) as u32;
     let right_eye_x = (s * 0.65) as u32;
@@ -180,6 +257,17 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
             fill_rect(&mut img, left_eye_x - dot, eye_y - dot, left_eye_x + dot, eye_y + dot, eye_color);
             fill_rect(&mut img, right_eye_x - dot, eye_y - dot, right_eye_x + dot, eye_y + dot, eye_color);
         }
+    }
+
+    // Cheek bolts
+    let bolt_style = hash[15] % 2;
+    if bolt_style == 1 {
+        let bolt_r = (s * 0.02) as u32;
+        let bolt_y = (s * 0.48) as u32;
+        let bolt_lx = (s * 0.25) as u32;
+        let bolt_rx = (s * 0.75) as u32;
+        fill_circle(&mut img, bolt_lx, bolt_y, bolt_r, accent_color);
+        fill_circle(&mut img, bolt_rx, bolt_y, bolt_r, accent_color);
     }
 
     // Mouth
@@ -216,6 +304,15 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
                 fill_rect(&mut img, x, mouth_y + y_off, x + step / 2, mouth_y + y_off + 2, mouth_color);
             }
         }
+    }
+
+    // Chin plate
+    let chin_style = hash[16] % 3;
+    if chin_style > 0 {
+        let chin_y = (s * 0.62) as u32;
+        let chin_w = if chin_style == 1 { (s * 0.1) as u32 } else { (s * 0.18) as u32 };
+        let chin_h = (s * 0.03) as u32;
+        fill_rect(&mut img, size / 2 - chin_w, chin_y, size / 2 + chin_w, chin_y + chin_h, accent_color);
     }
 
     img
@@ -710,6 +807,7 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
     let body_color = color_from_hash(&hash, 0);
     let eye_color = color_from_hash(&hash, 3);
     let mouth_color = color_from_hash(&hash, 9);
+    let accent_color = color_from_hash(&hash, 12);
     let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
     let s = size as f64;
 
@@ -720,10 +818,59 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
     let ht = (s * 0.2) as u32;
     let hw = (s * 0.6) as u32;
     let hh = (s * 0.5) as u32;
+    let hr = hl + hw; // head right edge
     parts.push_str(&format!(
         r#"<rect x="{hl}" y="{ht}" width="{hw}" height="{hh}" rx="4" fill="{}"/>"#,
         hex_color(body_color)
     ));
+
+    // Ears
+    let ear_style = hash[12] % 4;
+    let ear_w = (s * 0.06) as u32;
+    let ear_h = (s * 0.12) as u32;
+    let ear_y = (s * 0.35) as u32;
+    match ear_style {
+        1 => {
+            // Rectangular side ears
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{ear_y}" width="{ear_w}" height="{ear_h}" rx="2" fill="{}"/>"#,
+                hl.saturating_sub(ear_w), hex_color(accent_color)
+            ));
+            parts.push_str(&format!(
+                r#"<rect x="{hr}" y="{ear_y}" width="{ear_w}" height="{ear_h}" rx="2" fill="{}"/>"#,
+                hex_color(accent_color)
+            ));
+        }
+        2 => {
+            // Round disc ears
+            let er = (s * 0.05) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{hl}" cy="{}" r="{er}" fill="{}"/>"#,
+                ear_y + ear_h / 2, hex_color(accent_color)
+            ));
+            parts.push_str(&format!(
+                r#"<circle cx="{hr}" cy="{}" r="{er}" fill="{}"/>"#,
+                ear_y + ear_h / 2, hex_color(accent_color)
+            ));
+        }
+        3 => {
+            // Pointed ears (triangles)
+            let tri_h = (s * 0.1) as u32;
+            // Left ear
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{}" fill="{}"/>"#,
+                hl, ear_y, hl.saturating_sub(ear_w), ear_y + tri_h / 2, hl, ear_y + tri_h,
+                hex_color(accent_color)
+            ));
+            // Right ear
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{}" fill="{}"/>"#,
+                hr, ear_y, hr + ear_w, ear_y + tri_h / 2, hr, ear_y + tri_h,
+                hex_color(accent_color)
+            ));
+        }
+        _ => {} // No ears
+    }
 
     // Antenna
     let ax = size / 2;
@@ -765,8 +912,63 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
         }
     }
 
-    // Eyes
+    // Forehead marking
+    let forehead_style = hash[14] % 3;
+    match forehead_style {
+        1 => {
+            // LED dot
+            let led_y = (s * 0.26) as u32;
+            let led_r = (s * 0.025) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{ax}" cy="{led_y}" r="{led_r}" fill="{}"/>"#,
+                hex_color(accent_color)
+            ));
+        }
+        2 => {
+            // Horizontal stripe
+            let stripe_y = (s * 0.25) as u32;
+            let stripe_w = (s * 0.15) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{stripe_y}" width="{}" height="2" fill="{}"/>"#,
+                ax - stripe_w, stripe_w * 2, hex_color(accent_color)
+            ));
+        }
+        _ => {}
+    }
+
+    // Visor
+    let visor_style = hash[13] % 3;
     let ey = (s * 0.38) as u32;
+    if visor_style > 0 {
+        let visor_h = (s * 0.06) as u32;
+        let visor_left = hl + (s * 0.04) as u32;
+        let visor_right = hr - (s * 0.04) as u32;
+        let visor_color = (
+            body_color.0.saturating_sub(30),
+            body_color.1.saturating_sub(30),
+            body_color.2.saturating_sub(30),
+        );
+        if visor_style == 1 {
+            parts.push_str(&format!(
+                r#"<rect x="{visor_left}" y="{}" width="{}" height="{}" rx="3" fill="{}"/>"#,
+                ey - visor_h, visor_right - visor_left, visor_h * 2, hex_color(visor_color)
+            ));
+        } else {
+            let seg_w = (s * 0.14) as u32;
+            let le = (s * 0.35) as u32;
+            let re = (s * 0.65) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="3" fill="{}"/>"#,
+                le - seg_w, ey - visor_h, seg_w * 2, visor_h * 2, hex_color(visor_color)
+            ));
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="3" fill="{}"/>"#,
+                re - seg_w, ey - visor_h, seg_w * 2, visor_h * 2, hex_color(visor_color)
+            ));
+        }
+    }
+
+    // Eyes
     let es = (s * 0.08) as u32;
     let le = (s * 0.35) as u32;
     let re = (s * 0.65) as u32;
@@ -797,6 +999,17 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
                 re - d, ey - d, d * 2, d * 2, hex_color(eye_color)
             ));
         }
+    }
+
+    // Cheek bolts
+    let bolt_style = hash[15] % 2;
+    if bolt_style == 1 {
+        let bolt_r = (s * 0.02) as u32;
+        let bolt_y = (s * 0.48) as u32;
+        let bolt_lx = (s * 0.25) as u32;
+        let bolt_rx = (s * 0.75) as u32;
+        parts.push_str(&format!(r#"<circle cx="{bolt_lx}" cy="{bolt_y}" r="{bolt_r}" fill="{}"/>"#, hex_color(accent_color)));
+        parts.push_str(&format!(r#"<circle cx="{bolt_rx}" cy="{bolt_y}" r="{bolt_r}" fill="{}"/>"#, hex_color(accent_color)));
     }
 
     // Mouth
@@ -831,6 +1044,18 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
                 ax - w, w * 2, hex_color(mouth_color)
             ));
         }
+    }
+
+    // Chin plate
+    let chin_style = hash[16] % 3;
+    if chin_style > 0 {
+        let chin_y = (s * 0.62) as u32;
+        let chin_w = if chin_style == 1 { (s * 0.1) as u32 } else { (s * 0.18) as u32 };
+        let chin_h = (s * 0.03) as u32;
+        parts.push_str(&format!(
+            r#"<rect x="{}" y="{chin_y}" width="{}" height="{chin_h}" rx="1" fill="{}"/>"#,
+            ax - chin_w, chin_w * 2, hex_color(accent_color)
+        ));
     }
 
     format!(
