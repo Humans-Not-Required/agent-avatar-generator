@@ -902,6 +902,162 @@ class TestThemes(unittest.TestCase):
             os.unlink(path)
 
 
+class TestTimingAPI(unittest.TestCase):
+    """Tests for performance timing features."""
+
+    def setUp(self):
+        self.client = AvatarService(
+            os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        )
+
+    # ── generate_timed ──
+
+    def test_generate_timed_returns_tuple(self):
+        """generate_timed returns (data, generation_ms)."""
+        data, gen_ms = self.client.generate_timed("timing-sdk-test")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:4], b"\x89PNG")
+        self.assertIsInstance(gen_ms, float)
+        self.assertGreaterEqual(gen_ms, 0.0)
+
+    def test_generate_timed_svg(self):
+        """generate_timed returns SVG with timing."""
+        data, gen_ms = self.client.generate_timed("timing-svg", fmt="svg")
+        # SVG is returned as bytes from _request (Content-Type: image/svg+xml)
+        text = data.decode("utf-8") if isinstance(data, bytes) else data
+        self.assertTrue(text.startswith("<svg"))
+        self.assertIsInstance(gen_ms, float)
+        self.assertGreaterEqual(gen_ms, 0.0)
+
+    def test_generate_timed_with_theme(self):
+        """generate_timed works with themes."""
+        data, gen_ms = self.client.generate_timed("timing-themed", theme="warm")
+        self.assertIsInstance(data, bytes)
+        self.assertIsInstance(gen_ms, float)
+
+    def test_generate_timed_with_style(self):
+        """generate_timed works with different styles."""
+        data, gen_ms = self.client.generate_timed("timing-robot", style="robot")
+        self.assertIsInstance(data, bytes)
+        self.assertIsInstance(gen_ms, float)
+
+    def test_generate_timed_all_styles(self):
+        """All styles return timing info."""
+        styles = ["geometric", "rings", "robot", "blockies", "gradient",
+                  "initials", "starburst", "mosaic", "pixel", "sunset"]
+        for style in styles:
+            data, gen_ms = self.client.generate_timed(f"timing-{style}", style=style, size=64)
+            self.assertIsInstance(gen_ms, float, f"Style {style} should return timing")
+            self.assertGreaterEqual(gen_ms, 0.0)
+
+    # ── batch_timed ──
+
+    def test_batch_timed_returns_full_response(self):
+        """batch_timed returns dict with avatars, generation_ms, count."""
+        result = self.client.batch_timed(["bt-a", "bt-b", "bt-c"], size=64)
+        self.assertIn("avatars", result)
+        self.assertIn("generation_ms", result)
+        self.assertIn("count", result)
+        self.assertEqual(result["count"], 3)
+        self.assertEqual(len(result["avatars"]), 3)
+        self.assertIsInstance(result["generation_ms"], float)
+        self.assertGreaterEqual(result["generation_ms"], 0.0)
+
+    def test_batch_timed_with_theme(self):
+        """batch_timed works with themes."""
+        result = self.client.batch_timed(["btt-1", "btt-2"], theme="ocean", size=64)
+        self.assertEqual(result["count"], 2)
+        self.assertIsInstance(result["generation_ms"], float)
+
+    def test_batch_timed_50_seeds(self):
+        """batch_timed handles max seeds with timing."""
+        seeds = [f"perf-{i}" for i in range(50)]
+        result = self.client.batch_timed(seeds, size=32)
+        self.assertEqual(result["count"], 50)
+        self.assertEqual(len(result["avatars"]), 50)
+        self.assertGreater(result["generation_ms"], 0.0)
+
+    def test_batch_vs_batch_timed_consistency(self):
+        """batch and batch_timed produce same avatar data."""
+        seeds = ["cons-a", "cons-b", "cons-c"]
+        avatars = self.client.batch(seeds, style="rings", size=64)
+        timed = self.client.batch_timed(seeds, style="rings", size=64)
+        for i, av in enumerate(avatars):
+            self.assertEqual(av["data"], timed["avatars"][i]["data"])
+
+    # ── gallery_zip_timed ──
+
+    def test_gallery_zip_timed_returns_tuple(self):
+        """gallery_zip_timed returns (bytes, generation_ms, count)."""
+        data, gen_ms, count = self.client.gallery_zip_timed(["gzt-a", "gzt-b"], size=32)
+        self.assertIsInstance(data, bytes)
+        # ZIP magic number
+        self.assertEqual(data[:2], b"PK")
+        self.assertIsInstance(gen_ms, float)
+        self.assertGreaterEqual(gen_ms, 0.0)
+        self.assertEqual(count, 2)
+
+    def test_gallery_zip_timed_all_styles(self):
+        """gallery_zip_timed with style='all' returns correct count."""
+        data, gen_ms, count = self.client.gallery_zip_timed(
+            ["gzt-all-1", "gzt-all-2"], style="all", size=32
+        )
+        # 2 seeds × 10 styles = 20
+        self.assertEqual(count, 20)
+        self.assertIsInstance(gen_ms, float)
+
+    def test_gallery_zip_timed_with_theme(self):
+        """gallery_zip_timed works with themes."""
+        data, gen_ms, count = self.client.gallery_zip_timed(
+            ["gzt-theme"], theme="neon", size=32
+        )
+        self.assertIsInstance(gen_ms, float)
+        self.assertEqual(count, 1)
+
+    def test_gallery_zip_vs_timed_consistency(self):
+        """gallery_zip and gallery_zip_timed produce same ZIP data."""
+        seeds = ["gzc-1", "gzc-2"]
+        plain = self.client.gallery_zip(seeds, style="blockies", size=32)
+        timed_data, _, _ = self.client.gallery_zip_timed(seeds, style="blockies", size=32)
+        self.assertEqual(plain, timed_data)
+
+
+class TestParallelDeterminism(unittest.TestCase):
+    """Tests to verify parallel generation produces deterministic results."""
+
+    def setUp(self):
+        self.client = AvatarService(
+            os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        )
+
+    def test_batch_deterministic_across_calls(self):
+        """Multiple batch calls produce identical results (parallel safety)."""
+        seeds = [f"det-{i}" for i in range(10)]
+        result1 = self.client.batch(seeds, style="geometric", size=64)
+        result2 = self.client.batch(seeds, style="geometric", size=64)
+        for i in range(10):
+            self.assertEqual(result1[i]["data"], result2[i]["data"],
+                           f"Seed det-{i} should be deterministic across calls")
+
+    def test_batch_matches_individual(self):
+        """Batch-generated avatars match individually generated ones."""
+        seeds = ["match-a", "match-b", "match-c"]
+        batch_result = self.client.batch(seeds, style="robot", size=64)
+        import base64
+        for i, seed in enumerate(seeds):
+            individual = self.client.generate_png(seed, style="robot", size=64)
+            individual_b64 = base64.b64encode(individual).decode()
+            self.assertEqual(batch_result[i]["data"], individual_b64,
+                           f"Batch vs individual mismatch for seed '{seed}'")
+
+    def test_gallery_zip_deterministic(self):
+        """Gallery ZIP is deterministic across calls."""
+        seeds = ["gd-1", "gd-2", "gd-3"]
+        zip1 = self.client.gallery_zip(seeds, style="mosaic", size=32)
+        zip2 = self.client.gallery_zip(seeds, style="mosaic", size=32)
+        self.assertEqual(zip1, zip2)
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()

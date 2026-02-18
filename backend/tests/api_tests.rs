@@ -1,3 +1,4 @@
+use base64::Engine;
 use rocket::http::{ContentType, Status};
 use rocket::local::blocking::Client;
 
@@ -1162,7 +1163,7 @@ fn test_themed_batch() {
     let body: serde_json::Value = response.into_json().unwrap();
     let avatars = body["avatars"].as_array().unwrap();
     assert_eq!(avatars.len(), 2);
-    assert!(avatars[0]["data"].as_str().unwrap().len() > 0);
+    assert!(!avatars[0]["data"].as_str().unwrap().is_empty());
 }
 
 #[test]
@@ -1205,6 +1206,238 @@ fn test_neon_theme_dark_bg_png() {
     let bytes = response.into_bytes().unwrap();
     // Just verify it produces a valid PNG
     assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+// ── Performance: Timing Headers ──
+
+#[test]
+fn test_png_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), "Should have X-Generation-Time-Ms header");
+    let ms: f64 = header.unwrap().parse().expect("Should be a valid f64");
+    assert!(ms >= 0.0, "Generation time should be non-negative");
+    assert!(ms < 10000.0, "Generation time should be reasonable (<10s)");
+}
+
+#[test]
+fn test_svg_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test?format=svg").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), "Should have X-Generation-Time-Ms header");
+    let ms: f64 = header.unwrap().parse().expect("Should be a valid f64");
+    assert!(ms >= 0.0);
+}
+
+#[test]
+fn test_themed_png_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test?theme=warm").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), "Themed PNG should have timing header");
+}
+
+#[test]
+fn test_themed_svg_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test?format=svg&theme=cool").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), "Themed SVG should have timing header");
+}
+
+#[test]
+fn test_png_extension_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test.png").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), ".png extension route should have timing header");
+}
+
+#[test]
+fn test_svg_extension_has_generation_time_header() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/timing-test.svg").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(header.is_some(), ".svg extension route should have timing header");
+}
+
+#[test]
+fn test_all_styles_have_generation_time() {
+    let client = client();
+    let styles = ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"];
+    for style in &styles {
+        let response = client.get(format!("/api/v1/avatar/perf-test?style={style}")).dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let header = response.headers().get_one("X-Generation-Time-Ms");
+        assert!(header.is_some(), "Style {style} should have timing header");
+        let ms: f64 = header.unwrap().parse().expect("Should be a valid f64");
+        assert!(ms >= 0.0, "Style {style} timing should be non-negative");
+    }
+}
+
+// ── Performance: Parallel Batch ──
+
+#[test]
+fn test_batch_response_has_timing() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["a","b","c"]}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    assert!(body["generation_ms"].is_f64(), "Batch response should include generation_ms");
+    assert!(body["generation_ms"].as_f64().unwrap() >= 0.0);
+    assert_eq!(body["count"], 3, "Batch response should include count");
+}
+
+#[test]
+fn test_batch_parallel_produces_same_results() {
+    // Verify parallel batch produces identical results to sequential single requests
+    let client = client();
+    let seeds = vec!["parallel-a", "parallel-b", "parallel-c", "parallel-d", "parallel-e"];
+
+    // Get batch results
+    let batch_body = serde_json::json!({"seeds": seeds, "style": "geometric", "size": 64});
+    let batch_response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(batch_body.to_string())
+        .dispatch();
+    assert_eq!(batch_response.status(), Status::Ok);
+    let batch_json: serde_json::Value = batch_response.into_json().unwrap();
+    let batch_avatars = batch_json["avatars"].as_array().unwrap();
+
+    // Get individual results
+    for (i, seed) in seeds.iter().enumerate() {
+        let individual = client
+            .get(format!("/api/v1/avatar/{seed}?style=geometric&size=64"))
+            .dispatch();
+        assert_eq!(individual.status(), Status::Ok);
+        let individual_bytes = individual.into_bytes().unwrap();
+        let individual_b64 = base64::engine::general_purpose::STANDARD.encode(&individual_bytes);
+
+        assert_eq!(
+            batch_avatars[i]["data"].as_str().unwrap(),
+            individual_b64,
+            "Batch result for seed '{seed}' should match individual generation"
+        );
+    }
+}
+
+#[test]
+fn test_batch_50_seeds_with_timing() {
+    let client = client();
+    let seeds: Vec<String> = (0..50).map(|i| format!("perf-seed-{i}")).collect();
+    let body = serde_json::json!({"seeds": seeds, "size": 64});
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let json: serde_json::Value = response.into_json().unwrap();
+    assert_eq!(json["count"], 50);
+    assert!(json["generation_ms"].as_f64().unwrap() > 0.0, "50-seed batch should take measurable time");
+    assert_eq!(json["avatars"].as_array().unwrap().len(), 50);
+}
+
+#[test]
+fn test_batch_themed_parallel() {
+    let client = client();
+    let body = serde_json::json!({"seeds": ["t1","t2","t3","t4","t5"], "theme": "ocean", "size": 64});
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let json: serde_json::Value = response.into_json().unwrap();
+    assert_eq!(json["count"], 5);
+    assert!(json["generation_ms"].is_f64());
+    // Verify themed results differ from unthemed
+    let unthemed_body = serde_json::json!({"seeds": ["t1","t2","t3","t4","t5"], "size": 64});
+    let unthemed_resp = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(unthemed_body.to_string())
+        .dispatch();
+    let unthemed_json: serde_json::Value = unthemed_resp.into_json().unwrap();
+    // At least one avatar should differ
+    let themed_avatars = json["avatars"].as_array().unwrap();
+    let unthemed_avatars = unthemed_json["avatars"].as_array().unwrap();
+    let any_different = themed_avatars.iter().zip(unthemed_avatars.iter())
+        .any(|(a, b)| a["data"] != b["data"]);
+    assert!(any_different, "Themed batch should produce different results than unthemed");
+}
+
+// ── Performance: Gallery ZIP Timing ──
+
+#[test]
+fn test_gallery_zip_has_timing_headers() {
+    let client = client();
+    let body = serde_json::json!({"seeds": ["zip-a", "zip-b"], "size": 64});
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let gen_header = response.headers().get_one("X-Generation-Time-Ms");
+    assert!(gen_header.is_some(), "ZIP should have X-Generation-Time-Ms header");
+    let ms: f64 = gen_header.unwrap().parse().unwrap();
+    assert!(ms >= 0.0);
+    let count_header = response.headers().get_one("X-Avatar-Count");
+    assert!(count_header.is_some(), "ZIP should have X-Avatar-Count header");
+    assert_eq!(count_header.unwrap(), "2");
+}
+
+#[test]
+fn test_gallery_zip_all_styles_has_correct_count() {
+    let client = client();
+    let body = serde_json::json!({"seeds": ["count-a", "count-b", "count-c"], "style": "all", "size": 32});
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let count_header = response.headers().get_one("X-Avatar-Count");
+    assert!(count_header.is_some());
+    // 3 seeds × 10 styles = 30
+    assert_eq!(count_header.unwrap(), "30");
+}
+
+#[test]
+fn test_gallery_zip_parallel_determinism() {
+    // Generate same ZIP twice — should produce identical files
+    let client = client();
+    let body = serde_json::json!({"seeds": ["det-1", "det-2", "det-3"], "style": "geometric", "size": 64});
+
+    let resp1 = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    let bytes1 = resp1.into_bytes().unwrap();
+
+    let resp2 = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch();
+    let bytes2 = resp2.into_bytes().unwrap();
+
+    assert_eq!(bytes1, bytes2, "Same inputs should produce identical ZIP files");
 }
 
 #[test]

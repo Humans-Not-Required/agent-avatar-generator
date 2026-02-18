@@ -2257,9 +2257,9 @@ mod tests {
     fn test_color_range() {
         let hash = hash_seed("test");
         let (r, g, b) = color_from_hash(&hash, 0);
-        assert!(r >= 40 && r <= 220);
-        assert!(g >= 40 && g <= 220);
-        assert!(b >= 40 && b <= 220);
+        assert!((40..=220).contains(&r));
+        assert!((40..=220).contains(&g));
+        assert!((40..=220).contains(&b));
     }
 
     #[test]
@@ -2464,7 +2464,7 @@ mod tests {
         let grid = 11u32;
         let cell = 256 / (grid + 2);
         let offset = (256 - cell * grid) / 2;
-        let mid = offset + cell * grid / 2; // center x
+        let _mid = offset + cell * grid / 2; // center x
 
         // Sample several rows at cell centers and check left-right mirror
         for row in 0..grid {

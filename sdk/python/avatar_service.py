@@ -106,6 +106,23 @@ class AvatarService:
         data, status, headers = self._request("GET", f"/api/v1/avatar/{quote(seed, safe='')}?{qs}")
         return data
 
+    def generate_timed(self, seed, style="geometric", size=256, fmt="png", background=None, theme=None):
+        """Generate an avatar with timing info. Returns (data, generation_ms).
+
+        data is bytes (PNG) or string (SVG). generation_ms is float or None.
+        """
+        params = {"style": style, "size": size, "format": fmt}
+        if background:
+            params["background"] = background
+        if theme:
+            params["theme"] = theme
+        qs = urlencode(params)
+        data, status, headers = self._request("GET", f"/api/v1/avatar/{quote(seed, safe='')}?{qs}")
+        gen_ms = headers.get("X-Generation-Time-Ms")
+        if gen_ms is not None:
+            gen_ms = float(gen_ms)
+        return data, gen_ms
+
     def generate_png(self, seed, style="geometric", size=256, background=None, theme=None):
         """Generate a PNG avatar. Returns bytes."""
         return self.generate(seed, style=style, size=size, fmt="png", background=background, theme=theme)
@@ -126,6 +143,19 @@ class AvatarService:
             body["theme"] = theme
         data, status, headers = self._request("POST", "/api/v1/avatar/batch", body=body)
         return data["avatars"]
+
+    def batch_timed(self, seeds, style="geometric", size=128, fmt="png", background=None, theme=None):
+        """Batch generate avatars with timing info.
+
+        Returns dict with keys: avatars, generation_ms, count.
+        """
+        body = {"seeds": seeds, "style": style, "size": size, "format": fmt}
+        if background:
+            body["background"] = background
+        if theme:
+            body["theme"] = theme
+        data, status, headers = self._request("POST", "/api/v1/avatar/batch", body=body)
+        return data
 
     def gallery_zip(self, seeds, style="geometric", size=256, fmt="png", background=None, theme=None):
         """Download multiple avatars as a ZIP file. Returns bytes.
@@ -148,6 +178,26 @@ class AvatarService:
             body["theme"] = theme
         data, status, headers = self._request("POST", "/api/v1/avatar/gallery/zip", body=body)
         return data
+
+    def gallery_zip_timed(self, seeds, style="geometric", size=256, fmt="png", background=None, theme=None):
+        """Download gallery ZIP with timing info.
+
+        Returns (bytes, generation_ms, avatar_count).
+        generation_ms and avatar_count are from response headers (float/int or None).
+        """
+        body = {"seeds": seeds, "style": style, "size": size, "format": fmt}
+        if background:
+            body["background"] = background
+        if theme:
+            body["theme"] = theme
+        data, status, headers = self._request("POST", "/api/v1/avatar/gallery/zip", body=body)
+        gen_ms = headers.get("X-Generation-Time-Ms")
+        if gen_ms is not None:
+            gen_ms = float(gen_ms)
+        count = headers.get("X-Avatar-Count")
+        if count is not None:
+            count = int(count)
+        return data, gen_ms, count
 
     def gallery_zip_save(self, seeds, path, style="geometric", size=256, fmt="png", background=None, theme=None):
         """Download gallery ZIP and save to file.

@@ -373,21 +373,21 @@ mod tests {
 
     #[test]
     fn test_rgb_to_hsl_white() {
-        let (h, s, l) = rgb_to_hsl(255, 255, 255);
+        let (_h, s, l) = rgb_to_hsl(255, 255, 255);
         assert!((s - 0.0).abs() < 0.01, "White should be achromatic");
         assert!((l - 1.0).abs() < 0.01, "White lightness should be 1.0");
     }
 
     #[test]
     fn test_rgb_to_hsl_black() {
-        let (h, s, l) = rgb_to_hsl(0, 0, 0);
+        let (_h, s, l) = rgb_to_hsl(0, 0, 0);
         assert!((s - 0.0).abs() < 0.01, "Black should be achromatic");
         assert!((l - 0.0).abs() < 0.01, "Black lightness should be 0.0");
     }
 
     #[test]
     fn test_rgb_to_hsl_gray() {
-        let (h, s, l) = rgb_to_hsl(128, 128, 128);
+        let (_h, s, l) = rgb_to_hsl(128, 128, 128);
         assert!((s - 0.0).abs() < 0.01, "Gray should be achromatic");
         assert!((l - 0.502).abs() < 0.01, "Gray lightness should be ~0.5");
     }
@@ -424,7 +424,7 @@ mod tests {
         let (r, g, b) = theme.remap_color(200, 50, 50);
         let (h, _s, _l) = rgb_to_hsl(r, g, b);
         // Cool range: center 220, range 60 → hues roughly 160..280
-        assert!(h >= 155.0 && h <= 285.0, "Red remapped to cool should be in cool range, got {h}°");
+        assert!((155.0..=285.0).contains(&h), "Red remapped to cool should be in cool range, got {h}°");
     }
 
     #[test]
@@ -565,7 +565,7 @@ mod tests {
         let (r, g, b) = theme.remap_color(100, 100, 200);
         let (h, s, _l) = rgb_to_hsl(r, g, b);
         // Earth: center 30, range 25 → hues 5-55
-        assert!(h >= 0.0 && h <= 60.0, "Earth should produce warm-brown hues, got {h}°");
+        assert!((0.0..=60.0).contains(&h), "Earth should produce warm-brown hues, got {h}°");
         assert!(s <= 0.6, "Earth should be muted, got s={s:.3}");
     }
 
@@ -575,6 +575,6 @@ mod tests {
         let (r, g, b) = theme.remap_color(200, 50, 50);
         let (h, _s, _l) = rgb_to_hsl(r, g, b);
         // Forest: center 130, range 50 → hues 80-180
-        assert!(h >= 75.0 && h <= 185.0, "Forest should produce green hues, got {h}°");
+        assert!((75.0..=185.0).contains(&h), "Forest should produce green hues, got {h}°");
     }
 }

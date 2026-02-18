@@ -5,12 +5,14 @@ use crate::theme::{self, Theme};
 
 use base64::Engine;
 use image::ImageFormat;
+use rayon::prelude::*;
 use rocket::http::{ContentType, Header, Status};
 use rocket::response::content::{RawHtml, RawText};
 use rocket::response::{self, Responder, Response};
 use rocket::serde::json::Json;
 use rocket::{get, post, Request};
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 // ── Response Types ──
 
@@ -18,13 +20,19 @@ pub struct ImageResponse {
     pub bytes: Vec<u8>,
     pub content_type: ContentType,
     pub cache_control: String,
+    pub generation_ms: Option<f64>,
 }
 
 impl<'r> Responder<'r, 'static> for ImageResponse {
     fn respond_to(self, _req: &'r Request<'_>) -> response::Result<'static> {
-        Response::build()
+        let mut builder = Response::build();
+        builder
             .header(self.content_type)
-            .header(Header::new("Cache-Control", self.cache_control))
+            .header(Header::new("Cache-Control", self.cache_control));
+        if let Some(ms) = self.generation_ms {
+            builder.header(Header::new("X-Generation-Time-Ms", format!("{ms:.2}")));
+        }
+        builder
             .sized_body(self.bytes.len(), std::io::Cursor::new(self.bytes))
             .ok()
     }
@@ -33,13 +41,19 @@ impl<'r> Responder<'r, 'static> for ImageResponse {
 pub struct SvgResponse {
     pub body: String,
     pub cache_control: String,
+    pub generation_ms: Option<f64>,
 }
 
 impl<'r> Responder<'r, 'static> for SvgResponse {
     fn respond_to(self, _req: &'r Request<'_>) -> response::Result<'static> {
-        Response::build()
+        let mut builder = Response::build();
+        builder
             .header(ContentType::SVG)
-            .header(Header::new("Cache-Control", self.cache_control))
+            .header(Header::new("Cache-Control", self.cache_control));
+        if let Some(ms) = self.generation_ms {
+            builder.header(Header::new("X-Generation-Time-Ms", format!("{ms:.2}")));
+        }
+        builder
             .sized_body(self.body.len(), std::io::Cursor::new(self.body))
             .ok()
     }
@@ -150,6 +164,7 @@ pub fn generate_avatar(
     let bg = parse_bg(&background);
     let t = parse_theme(&theme)?;
     let fmt = format.as_deref().unwrap_or("png");
+    let start = Instant::now();
 
     let inner = match fmt {
         "svg" => {
@@ -158,10 +173,12 @@ pub fn generate_avatar(
             } else {
                 avatar::generate_svg(seed, &style, size, bg)
             };
+            let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
             match result {
                 Ok(svg) => Ok(ImageResponseOrSvg::Svg(SvgResponse {
                     body: svg,
                     cache_control: CACHE_HEADER.to_string(),
+                    generation_ms: Some(gen_ms),
                 })),
                 Err(e) => Err((
                     Status::InternalServerError,
@@ -175,11 +192,13 @@ pub fn generate_avatar(
             } else {
                 avatar::generate_png(seed, &style, size, bg)
             };
+            let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
             match result {
                 Ok(bytes) => Ok(ImageResponseOrSvg::Png(ImageResponse {
                     bytes,
                     content_type: ContentType::PNG,
                     cache_control: CACHE_HEADER.to_string(),
+                    generation_ms: Some(gen_ms),
                 })),
                 Err(e) => Err((
                     Status::InternalServerError,
@@ -227,12 +246,17 @@ pub fn generate_avatar_png(
         });
     }
 
+    let start = Instant::now();
     let inner = match avatar::generate_png(seed, DEFAULT_STYLE, DEFAULT_SIZE, None) {
-        Ok(bytes) => Ok(ImageResponse {
-            bytes,
-            content_type: ContentType::PNG,
-            cache_control: CACHE_HEADER.to_string(),
-        }),
+        Ok(bytes) => {
+            let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
+            Ok(ImageResponse {
+                bytes,
+                content_type: ContentType::PNG,
+                cache_control: CACHE_HEADER.to_string(),
+                generation_ms: Some(gen_ms),
+            })
+        }
         Err(e) => Err((
             Status::InternalServerError,
             Json(ApiError {
@@ -259,11 +283,16 @@ pub fn generate_avatar_svg(
         .strip_suffix(".svg")
         .unwrap_or(seed_svg);
 
+    let start = Instant::now();
     let inner = match avatar::generate_svg(seed, DEFAULT_STYLE, DEFAULT_SIZE, None) {
-        Ok(svg) => Ok(SvgResponse {
-            body: svg,
-            cache_control: CACHE_HEADER.to_string(),
-        }),
+        Ok(svg) => {
+            let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
+            Ok(SvgResponse {
+                body: svg,
+                cache_control: CACHE_HEADER.to_string(),
+                generation_ms: Some(gen_ms),
+            })
+        }
         Err(e) => Err((
             Status::InternalServerError,
             Json(ApiError {
@@ -360,48 +389,58 @@ pub fn batch_generate(
 
     let bg = parse_bg(&req.background);
     let t = req.theme.as_ref().and_then(|n| Theme::parse(n));
+    let start = Instant::now();
 
-    let mut results = Vec::new();
-    for seed in &req.seeds {
-        let data = match format {
-            "svg" => {
-                if let Some(ref t) = t {
-                    themed_svg(seed, style, size, bg, t)
-                        .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
-                } else {
-                    avatar::generate_svg(seed, style, size, bg)
-                        .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
+    // Generate all avatars in parallel using rayon
+    let results: Vec<BatchItem> = req.seeds
+        .par_iter()
+        .map(|seed| {
+            let data = match format {
+                "svg" => {
+                    if let Some(ref t) = t {
+                        themed_svg(seed, style, size, bg, t)
+                            .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
+                    } else {
+                        avatar::generate_svg(seed, style, size, bg)
+                            .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
+                    }
                 }
-            }
-            _ => {
-                if let Some(ref t) = t {
-                    themed_png(seed, style, size, bg, t)
-                        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
-                } else {
-                    avatar::generate_png(seed, style, size, bg)
-                        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+                _ => {
+                    if let Some(ref t) = t {
+                        themed_png(seed, style, size, bg, t)
+                            .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+                    } else {
+                        avatar::generate_png(seed, style, size, bg)
+                            .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+                    }
                 }
-            }
-        };
+            };
 
-        match data {
-            Ok(encoded) => results.push(BatchItem {
-                seed: seed.clone(),
-                data: encoded,
-                format: format.to_string(),
-                error: None,
-            }),
-            Err(e) => results.push(BatchItem {
-                seed: seed.clone(),
-                data: String::new(),
-                format: format.to_string(),
-                error: Some(e),
-            }),
-        }
-    }
+            match data {
+                Ok(encoded) => BatchItem {
+                    seed: seed.clone(),
+                    data: encoded,
+                    format: format.to_string(),
+                    error: None,
+                },
+                Err(e) => BatchItem {
+                    seed: seed.clone(),
+                    data: String::new(),
+                    format: format.to_string(),
+                    error: Some(e),
+                },
+            }
+        })
+        .collect();
+
+    let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     RateLimited {
-        inner: Ok(Json(BatchResponse { avatars: results })),
+        inner: Ok(Json(BatchResponse {
+            avatars: results,
+            generation_ms: gen_ms,
+            count: req.seeds.len(),
+        })),
         limit: rate.limit,
         remaining: rate.remaining,
     }
@@ -485,56 +524,74 @@ pub fn gallery_zip(
         vec![s.to_string()]
     };
 
+    let start = Instant::now();
+
+    // Build list of (seed, style) pairs to generate
+    let pairs: Vec<(String, String)> = req.seeds
+        .iter()
+        .flat_map(|seed| {
+            style_list.iter().map(move |style| (seed.clone(), style.clone()))
+        })
+        .collect();
+
+    let total_count = pairs.len();
+
+    // Generate all images in parallel
+    let generated: Vec<(String, Result<Vec<u8>, String>)> = pairs
+        .par_iter()
+        .map(|(seed, style)| {
+            let filename = if all_mode {
+                format!("{seed}_{style}.{format}")
+            } else {
+                format!("{seed}.{format}")
+            };
+
+            let data = match format {
+                "svg" => {
+                    if let Some(ref t) = t {
+                        themed_svg(seed, style, size, bg, t).map(|s| s.into_bytes())
+                    } else {
+                        avatar::generate_svg(seed, style, size, bg).map(|s| s.into_bytes())
+                    }
+                }
+                _ => {
+                    if let Some(ref t) = t {
+                        themed_png(seed, style, size, bg, t)
+                    } else {
+                        avatar::generate_png(seed, style, size, bg)
+                    }
+                }
+            };
+
+            (filename, data)
+        })
+        .collect();
+
+    // Write to ZIP sequentially (ZipWriter is not thread-safe)
     let mut zip_buf = std::io::Cursor::new(Vec::new());
     {
         let mut zip_writer = zip::ZipWriter::new(&mut zip_buf);
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
-        for seed in &req.seeds {
-            for style in &style_list {
-                let filename = if all_mode {
-                    format!("{seed}_{style}.{format}")
-                } else {
-                    format!("{seed}.{format}")
-                };
-
-                let data = match format {
-                    "svg" => {
-                        if let Some(ref t) = t {
-                            themed_svg(seed, style, size, bg, t).map(|s| s.into_bytes())
-                        } else {
-                            avatar::generate_svg(seed, style, size, bg).map(|s| s.into_bytes())
-                        }
-                    }
-                    _ => {
-                        if let Some(ref t) = t {
-                            themed_png(seed, style, size, bg, t)
-                        } else {
-                            avatar::generate_png(seed, style, size, bg)
-                        }
-                    }
-                };
-
-                match data {
-                    Ok(bytes) => {
-                        let _ = zip_writer.start_file(&filename, options);
-                        let _ = std::io::Write::write_all(&mut zip_writer, &bytes);
-                    }
-                    Err(_) => {
-                        // Skip failed avatars silently
-                    }
-                }
+        for (filename, data) in &generated {
+            if let Ok(bytes) = data {
+                let _ = zip_writer.start_file(filename, options);
+                let _ = std::io::Write::write_all(&mut zip_writer, bytes);
             }
         }
 
         let _ = zip_writer.finish();
     }
 
+    let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
+
     RateLimited {
         inner: Ok(ZipResponse {
             bytes: zip_buf.into_inner(),
             filename: "avatars.zip".to_string(),
+            generation_ms: Some(gen_ms),
+            count: Some(total_count),
         }),
         limit: rate.limit,
         remaining: rate.remaining,
@@ -544,16 +601,26 @@ pub fn gallery_zip(
 pub struct ZipResponse {
     pub bytes: Vec<u8>,
     pub filename: String,
+    pub generation_ms: Option<f64>,
+    pub count: Option<usize>,
 }
 
 impl<'r> Responder<'r, 'static> for ZipResponse {
     fn respond_to(self, _req: &'r Request<'_>) -> response::Result<'static> {
-        Response::build()
+        let mut builder = Response::build();
+        builder
             .header(ContentType::ZIP)
             .header(Header::new(
                 "Content-Disposition",
                 format!("attachment; filename=\"{}\"", self.filename),
-            ))
+            ));
+        if let Some(ms) = self.generation_ms {
+            builder.header(Header::new("X-Generation-Time-Ms", format!("{ms:.2}")));
+        }
+        if let Some(n) = self.count {
+            builder.header(Header::new("X-Avatar-Count", n.to_string()));
+        }
+        builder
             .sized_body(self.bytes.len(), std::io::Cursor::new(self.bytes))
             .ok()
     }
@@ -675,6 +742,8 @@ pub struct BatchRequest {
 #[derive(Debug, Serialize)]
 pub struct BatchResponse {
     pub avatars: Vec<BatchItem>,
+    pub generation_ms: f64,
+    pub count: usize,
 }
 
 #[derive(Debug, Serialize)]
