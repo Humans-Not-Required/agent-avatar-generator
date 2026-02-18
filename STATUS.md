@@ -1,6 +1,6 @@
 # Agent Avatar Generator - Status
 
-## Current State: 10 Styles, Enhanced Robot, Gallery View ✅
+## Current State: 10 Styles, Gallery ZIP, Enhanced Robot ✅
 
 Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
@@ -39,8 +39,13 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 - **Discovery:** `/api/v1/openapi.json`, `/llms.txt`, `/.well-known/skills/agent-avatar-generator/SKILL.md`
 - **Docker:** Multi-stage build, single port
 - **CI/CD:** GitHub Actions → ghcr.io + Watchtower auto-deploy
-- **Tests:** 215 Rust (73 unit + 73 lib + 69 HTTP integration)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 108 integration tests.
+- **Gallery ZIP Download** — `POST /api/v1/avatar/gallery/zip`
+  - Download multiple avatars as a ZIP file
+  - Style `"all"`: generates every style for each seed (seed × 10 styles)
+  - Max 50 seeds, PNG or SVG format, custom size and background
+  - Frontend: ZIP download button in gallery mode
+- **Tests:** 228 Rust (73 unit + 73 lib + 82 HTTP integration)
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. 122 integration tests.
 
 ### Tech Stack
 
@@ -55,7 +60,7 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 ### What's Next
 
 - Performance optimization for large batch requests
-- Gallery: download all as ZIP, share gallery URL
+- Gallery: share gallery URL (gallery ZIP ✅ done)
 - Color themes: user-specified palette/mood presets
 - Additional robot antenna styles and eye glow effects
 
