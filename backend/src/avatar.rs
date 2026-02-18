@@ -334,6 +334,228 @@ pub fn generate_gradient(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)
     img
 }
 
+/// Embedded 5×7 bitmap font for initials style.
+/// Each character is a u64 where the lower 35 bits represent a 5-wide × 7-tall grid.
+/// Bit layout: row 0 (top) bits 34-30, row 1 bits 29-25, ..., row 6 bits 4-0.
+fn bitmap_font() -> [u64; 36] {
+    [
+        // A-Z (indices 0-25)
+        0b01110_10001_10001_11111_10001_10001_10001, // A
+        0b11110_10001_10001_11110_10001_10001_11110, // B
+        0b01110_10001_10000_10000_10000_10001_01110, // C
+        0b11100_10010_10001_10001_10001_10010_11100, // D
+        0b11111_10000_10000_11110_10000_10000_11111, // E
+        0b11111_10000_10000_11110_10000_10000_10000, // F
+        0b01110_10001_10000_10111_10001_10001_01110, // G
+        0b10001_10001_10001_11111_10001_10001_10001, // H
+        0b01110_00100_00100_00100_00100_00100_01110, // I
+        0b00111_00010_00010_00010_00010_10010_01100, // J
+        0b10001_10010_10100_11000_10100_10010_10001, // K
+        0b10000_10000_10000_10000_10000_10000_11111, // L
+        0b10001_11011_10101_10101_10001_10001_10001, // M
+        0b10001_11001_10101_10011_10001_10001_10001, // N
+        0b01110_10001_10001_10001_10001_10001_01110, // O
+        0b11110_10001_10001_11110_10000_10000_10000, // P
+        0b01110_10001_10001_10001_10101_10010_01101, // Q
+        0b11110_10001_10001_11110_10100_10010_10001, // R
+        0b01110_10001_10000_01110_00001_10001_01110, // S
+        0b11111_00100_00100_00100_00100_00100_00100, // T
+        0b10001_10001_10001_10001_10001_10001_01110, // U
+        0b10001_10001_10001_10001_01010_01010_00100, // V
+        0b10001_10001_10001_10101_10101_11011_10001, // W
+        0b10001_01010_00100_00100_00100_01010_10001, // X
+        0b10001_01010_00100_00100_00100_00100_00100, // Y
+        0b11111_00001_00010_00100_01000_10000_11111, // Z
+        // 0-9 (indices 26-35)
+        0b01110_10001_10011_10101_11001_10001_01110, // 0
+        0b00100_01100_00100_00100_00100_00100_01110, // 1
+        0b01110_10001_00001_00110_01000_10000_11111, // 2
+        0b01110_10001_00001_00110_00001_10001_01110, // 3
+        0b00010_00110_01010_10010_11111_00010_00010, // 4
+        0b11111_10000_11110_00001_00001_10001_01110, // 5
+        0b01110_10001_10000_11110_10001_10001_01110, // 6
+        0b11111_00001_00010_00100_01000_01000_01000, // 7
+        0b01110_10001_10001_01110_10001_10001_01110, // 8
+        0b01110_10001_10001_01111_00001_10001_01110, // 9
+    ]
+}
+
+/// Get bitmap index for a character (A-Z → 0-25, 0-9 → 26-35), or None.
+fn char_to_font_idx(c: char) -> Option<usize> {
+    match c {
+        'A'..='Z' => Some((c as u8 - b'A') as usize),
+        'a'..='z' => Some((c as u8 - b'a') as usize),
+        '0'..='9' => Some(26 + (c as u8 - b'0') as usize),
+        _ => None,
+    }
+}
+
+/// Extract 1-2 initials from a seed string.
+fn extract_initials(seed: &str) -> Vec<usize> {
+    let mut result = Vec::new();
+
+    // Try to find alphanumeric characters
+    for c in seed.chars() {
+        if let Some(idx) = char_to_font_idx(c) {
+            result.push(idx);
+            if result.len() >= 2 {
+                break;
+            }
+        }
+    }
+
+    // If we got nothing, use hash bytes as fallback
+    if result.is_empty() {
+        let hash = hash_seed(seed);
+        result.push((hash[0] % 26) as usize); // A-Z
+    }
+
+    result
+}
+
+/// Render a bitmap character onto an image at (ox, oy) with given scale.
+fn render_char(
+    img: &mut RgbaImage,
+    font: &[u64; 36],
+    idx: usize,
+    ox: u32,
+    oy: u32,
+    scale: u32,
+    color: (u8, u8, u8),
+) {
+    let bits = font[idx];
+    for row in 0..7u32 {
+        for col in 0..5u32 {
+            let bit_pos = (6 - row) * 5 + (4 - col);
+            if (bits >> bit_pos) & 1 == 1 {
+                // Fill a scale × scale block
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        let px = ox + col * scale + dx;
+                        let py = oy + row * scale + dy;
+                        if px < img.width() && py < img.height() {
+                            img.put_pixel(px, py, Rgba([color.0, color.1, color.2, 255]));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Generate an initials-style avatar (1-2 letters on colored background).
+pub fn generate_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let bg = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
+    // Ensure letter color contrasts well with background
+    let letter_color = {
+        let brightness = (bg.0 as u16 + bg.1 as u16 + bg.2 as u16) / 3;
+        if brightness > 140 {
+            (40, 40, 40) // Dark text on light bg
+        } else {
+            (240, 240, 240) // Light text on dark bg
+        }
+    };
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+
+    // Fill background
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    let initials = extract_initials(seed);
+    let font = bitmap_font();
+    let num_chars = initials.len() as u32;
+
+    // Calculate scale: each char is 5 wide × 7 tall
+    // For 1 char: fill ~60% of width, for 2 chars: fit both with gap
+    let char_w = 5u32;
+    let char_h = 7u32;
+    let total_w = num_chars * char_w + (num_chars - 1); // chars + gaps
+
+    // Scale to fit ~70% of avatar width
+    let target_w = (size as f64 * 0.7) as u32;
+    let scale = (target_w / total_w).max(1).min(size / char_h);
+
+    // Center vertically and horizontally
+    let rendered_w = num_chars * char_w * scale + (num_chars - 1) * scale;
+    let rendered_h = char_h * scale;
+    let start_x = (size.saturating_sub(rendered_w)) / 2;
+    let start_y = (size.saturating_sub(rendered_h)) / 2;
+
+    for (i, &idx) in initials.iter().enumerate() {
+        let ox = start_x + i as u32 * (char_w * scale + scale);
+        render_char(&mut img, &font, idx, ox, start_y, scale, letter_color);
+    }
+
+    img
+}
+
+/// Generate a starburst-style avatar (radial rays from center).
+pub fn generate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let color1 = color_from_hash(&hash, 0);
+    let color2 = color_from_hash(&hash, 3);
+    let color3 = color_from_hash(&hash, 6);
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+
+    // Fill background
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    let center = size as f64 / 2.0;
+    // Number of rays: 8-20 based on hash
+    let num_rays = 8 + (hash[12] % 13) as u32;
+    let rotation = (hash[13] as f64 / 255.0) * std::f64::consts::PI * 2.0;
+    let ray_angle = std::f64::consts::PI * 2.0 / num_rays as f64;
+
+    let colors = [color1, color2, color3];
+    let max_radius = center * 0.9;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f64 - center;
+            let dy = y as f64 - center;
+            let dist = (dx * dx + dy * dy).sqrt();
+
+            if dist > max_radius {
+                continue;
+            }
+
+            let mut angle = dy.atan2(dx) + rotation;
+            if angle < 0.0 {
+                angle += std::f64::consts::PI * 2.0;
+            }
+
+            // Determine which ray this pixel belongs to
+            let ray_idx = (angle / ray_angle) as u32;
+            if ray_idx.is_multiple_of(2) {
+                let color = colors[(ray_idx as usize / 2) % colors.len()];
+                // Fade toward edges
+                let alpha = 1.0 - (dist / max_radius).powi(2);
+                let blend = |fg: u8, bg: u8| -> u8 {
+                    ((fg as f64 * alpha + bg as f64 * (1.0 - alpha)).round()) as u8
+                };
+                let r = blend(color.0, bg.0);
+                let g = blend(color.1, bg.1);
+                let b = blend(color.2, bg.2);
+                img.put_pixel(x, y, Rgba([r, g, b, 255]));
+            }
+        }
+    }
+
+    // Center dot
+    let dot_radius = (size as f64 * 0.08) as u32;
+    let dot_color = color_from_hash(&hash, 15);
+    fill_circle(&mut img, size / 2, size / 2, dot_radius, dot_color);
+
+    img
+}
+
 /// Generate an avatar as PNG bytes.
 pub fn generate_png(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>) -> Result<Vec<u8>, String> {
     let img = generate_image(seed, style, size, bg)?;
@@ -352,6 +574,8 @@ pub fn generate_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>
         "robot" => Ok(svg_robot(seed, size, bg)),
         "blockies" => Ok(svg_blockies(seed, size, bg)),
         "gradient" => Ok(svg_gradient(seed, size, bg)),
+        "initials" => Ok(svg_initials(seed, size, bg)),
+        "starburst" => Ok(svg_starburst(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -364,6 +588,8 @@ pub fn generate_image(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8
         "robot" => Ok(generate_robot(seed, size, bg)),
         "blockies" => Ok(generate_blockies(seed, size, bg)),
         "gradient" => Ok(generate_gradient(seed, size, bg)),
+        "initials" => Ok(generate_initials(seed, size, bg)),
+        "starburst" => Ok(generate_starburst(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -703,6 +929,102 @@ fn svg_gradient(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Str
     )
 }
 
+fn svg_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let bg = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
+    let brightness = (bg.0 as u16 + bg.1 as u16 + bg.2 as u16) / 3;
+    let letter_color = if brightness > 140 {
+        (40, 40, 40)
+    } else {
+        (240, 240, 240)
+    };
+
+    let initials = extract_initials(seed);
+    let text: String = initials
+        .iter()
+        .map(|&idx| {
+            if idx < 26 {
+                (b'A' + idx as u8) as char
+            } else {
+                (b'0' + (idx - 26) as u8) as char
+            }
+        })
+        .collect();
+
+    // SVG uses actual text element — much cleaner than bitmap
+    let font_size = if text.len() == 1 {
+        (size as f64 * 0.6) as u32
+    } else {
+        (size as f64 * 0.45) as u32
+    };
+    let center = size as f64 / 2.0;
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><rect width="{size}" height="{size}" fill="{bg}" rx="{rx}"/><text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="central" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="{font_size}" fill="{fg}">{text}</text></svg>"#,
+        bg = hex_color(bg),
+        rx = size / 8,
+        cx = center,
+        cy = center,
+        fg = hex_color(letter_color),
+    )
+}
+
+fn svg_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let color1 = color_from_hash(&hash, 0);
+    let color2 = color_from_hash(&hash, 3);
+    let color3 = color_from_hash(&hash, 6);
+    let dot_color = color_from_hash(&hash, 15);
+
+    let center = size as f64 / 2.0;
+    let num_rays = 8 + (hash[12] % 13) as u32;
+    let rotation = (hash[13] as f64 / 255.0) * 360.0;
+    let max_radius = center * 0.9;
+    let dot_radius = size as f64 * 0.08;
+
+    let colors = [color1, color2, color3];
+    let ray_angle = 360.0 / num_rays as f64;
+
+    let mut paths = String::new();
+    for i in 0..num_rays {
+        if i % 2 != 0 {
+            continue;
+        }
+        let color = colors[(i as usize / 2) % colors.len()];
+        let a1 = rotation + i as f64 * ray_angle;
+        let a2 = rotation + (i + 1) as f64 * ray_angle;
+        let a1_rad = a1 * std::f64::consts::PI / 180.0;
+        let a2_rad = a2 * std::f64::consts::PI / 180.0;
+
+        let x1 = center + max_radius * a1_rad.cos();
+        let y1 = center + max_radius * a1_rad.sin();
+        let x2 = center + max_radius * a2_rad.cos();
+        let y2 = center + max_radius * a2_rad.sin();
+
+        // Use large_arc_flag = 0 since each ray is < 180°
+        let large_arc = if ray_angle > 180.0 { 1 } else { 0 };
+
+        paths.push_str(&format!(
+            r#"<path d="M{cx:.1},{cy:.1} L{x1:.1},{y1:.1} A{r:.1},{r:.1} 0 {la} 1 {x2:.1},{y2:.1} Z" fill="{fill}" opacity="0.8"/>"#,
+            cx = center,
+            cy = center,
+            r = max_radius,
+            la = large_arc,
+            fill = hex_color(color),
+        ));
+    }
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><rect width="{size}" height="{size}" fill="{bg}"/>{paths}<circle cx="{cx}" cy="{cy}" r="{dr:.1}" fill="{dc}"/></svg>"#,
+        bg = hex_color(bg),
+        cx = center,
+        cy = center,
+        dr = dot_radius,
+        dc = hex_color(dot_color),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -723,7 +1045,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_png() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
             let result = generate_png("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid PNG");
             assert!(!result.unwrap().is_empty(), "Style {style} PNG should not be empty");
@@ -732,7 +1054,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_svg() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
             let result = generate_svg("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid SVG");
             let svg = result.unwrap();
@@ -826,5 +1148,141 @@ mod tests {
         let png = generate_png("test", "geometric", 128, None).unwrap();
         // PNG magic bytes
         assert_eq!(&png[..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
+
+    // ── Initials style tests ──
+
+    #[test]
+    fn test_initials_deterministic() {
+        let img1 = generate_png("Nanook", "initials", 256, None).unwrap();
+        let img2 = generate_png("Nanook", "initials", 256, None).unwrap();
+        assert_eq!(img1, img2);
+    }
+
+    #[test]
+    fn test_initials_different_seeds() {
+        let img1 = generate_png("Alice", "initials", 128, None).unwrap();
+        let img2 = generate_png("Bob", "initials", 128, None).unwrap();
+        assert_ne!(img1, img2);
+    }
+
+    #[test]
+    fn test_initials_extract_letters() {
+        let initials = extract_initials("Nanook");
+        assert_eq!(initials.len(), 2);
+        assert_eq!(initials[0], b'N' as usize - b'A' as usize); // N
+        assert_eq!(initials[1], b'a' as usize - b'a' as usize); // a
+    }
+
+    #[test]
+    fn test_initials_extract_numbers() {
+        let initials = extract_initials("42agent");
+        assert_eq!(initials.len(), 2);
+        assert_eq!(initials[0], 26 + 4); // '4' → index 30
+        assert_eq!(initials[1], 26 + 2); // '2' → index 28
+    }
+
+    #[test]
+    fn test_initials_extract_empty() {
+        // Non-alphanumeric seed should fall back to hash-derived character
+        let initials = extract_initials("🤖");
+        assert_eq!(initials.len(), 1);
+        assert!(initials[0] < 26); // Should be A-Z range
+    }
+
+    #[test]
+    fn test_initials_svg_contains_text() {
+        let svg = generate_svg("Nanook", "initials", 256, None).unwrap();
+        assert!(svg.contains("<text"), "SVG should contain text element");
+        // Both 'N' and 'a' map to uppercase in SVG (font index → letter)
+        assert!(svg.contains("NA"), "SVG should contain initials 'NA'");
+    }
+
+    #[test]
+    fn test_initials_single_char() {
+        let initials = extract_initials("X");
+        assert_eq!(initials.len(), 1);
+        assert_eq!(initials[0], b'X' as usize - b'A' as usize);
+    }
+
+    #[test]
+    fn test_initials_bg_override() {
+        let with = generate_png("Test", "initials", 128, Some((0, 0, 0))).unwrap();
+        let without = generate_png("Test", "initials", 128, None).unwrap();
+        assert_ne!(with, without);
+    }
+
+    #[test]
+    fn test_initials_small_size() {
+        let result = generate_png("AB", "initials", 16, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initials_large_size() {
+        let result = generate_png("AB", "initials", 512, None);
+        assert!(result.is_ok());
+    }
+
+    // ── Starburst style tests ──
+
+    #[test]
+    fn test_starburst_deterministic() {
+        let img1 = generate_png("star", "starburst", 256, None).unwrap();
+        let img2 = generate_png("star", "starburst", 256, None).unwrap();
+        assert_eq!(img1, img2);
+    }
+
+    #[test]
+    fn test_starburst_different_seeds() {
+        let img1 = generate_png("sun", "starburst", 128, None).unwrap();
+        let img2 = generate_png("moon", "starburst", 128, None).unwrap();
+        assert_ne!(img1, img2);
+    }
+
+    #[test]
+    fn test_starburst_svg_has_paths() {
+        let svg = generate_svg("star", "starburst", 256, None).unwrap();
+        assert!(svg.contains("<path"), "SVG should contain ray paths");
+        assert!(svg.contains("<circle"), "SVG should contain center dot");
+    }
+
+    #[test]
+    fn test_starburst_bg_override() {
+        let with = generate_png("star", "starburst", 128, Some((255, 0, 0))).unwrap();
+        let without = generate_png("star", "starburst", 128, None).unwrap();
+        assert_ne!(with, without);
+    }
+
+    #[test]
+    fn test_starburst_small_size() {
+        let result = generate_png("star", "starburst", 16, None);
+        assert!(result.is_ok());
+    }
+
+    // ── Bitmap font tests ──
+
+    #[test]
+    fn test_font_all_chars_nonzero() {
+        let font = bitmap_font();
+        for (i, &bits) in font.iter().enumerate() {
+            assert!(bits > 0, "Font char at index {i} should have non-zero bits");
+        }
+    }
+
+    #[test]
+    fn test_char_to_font_idx_coverage() {
+        // Uppercase
+        assert_eq!(char_to_font_idx('A'), Some(0));
+        assert_eq!(char_to_font_idx('Z'), Some(25));
+        // Lowercase
+        assert_eq!(char_to_font_idx('a'), Some(0));
+        assert_eq!(char_to_font_idx('z'), Some(25));
+        // Digits
+        assert_eq!(char_to_font_idx('0'), Some(26));
+        assert_eq!(char_to_font_idx('9'), Some(35));
+        // Invalid
+        assert_eq!(char_to_font_idx('!'), None);
+        assert_eq!(char_to_font_idx(' '), None);
     }
 }

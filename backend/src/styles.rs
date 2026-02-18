@@ -34,11 +34,21 @@ pub fn available_styles() -> Vec<StyleInfo> {
             description: "Two-color gradient with geometric overlay shape.".to_string(),
             sample_seed: "nanook".to_string(),
         },
+        StyleInfo {
+            name: "initials".to_string(),
+            description: "Letter-based avatar showing 1-2 initials on a colored background.".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
+        StyleInfo {
+            name: "starburst".to_string(),
+            description: "Radial rays from center with fading edges and center dot.".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
     ]
 }
 
 pub fn is_valid_style(style: &str) -> bool {
-    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient")
+    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst")
 }
 
 pub const DEFAULT_STYLE: &str = "geometric";

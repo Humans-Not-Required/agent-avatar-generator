@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient'];
+const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst'];
 const API_BASE = window.location.origin;
 
 function App() {

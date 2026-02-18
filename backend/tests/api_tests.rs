@@ -59,7 +59,7 @@ fn test_generate_svg() {
 #[test]
 fn test_all_styles_png() {
     let client = client();
-    for style in &["geometric", "rings", "robot", "blockies", "gradient"] {
+    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
         let response = client
             .get(format!("/api/v1/avatar/test?style={style}"))
             .dispatch();
@@ -75,7 +75,7 @@ fn test_all_styles_png() {
 #[test]
 fn test_all_styles_svg() {
     let client = client();
-    for style in &["geometric", "rings", "robot", "blockies", "gradient"] {
+    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
         let response = client
             .get(format!("/api/v1/avatar/test?style={style}&format=svg"))
             .dispatch();
@@ -275,13 +275,15 @@ fn test_list_styles() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let styles = body.as_array().unwrap();
-    assert_eq!(styles.len(), 5);
+    assert_eq!(styles.len(), 7);
     let names: Vec<&str> = styles.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"geometric"));
     assert!(names.contains(&"rings"));
     assert!(names.contains(&"robot"));
     assert!(names.contains(&"blockies"));
     assert!(names.contains(&"gradient"));
+    assert!(names.contains(&"initials"));
+    assert!(names.contains(&"starburst"));
 }
 
 // ── Discovery ──
@@ -422,4 +424,170 @@ fn test_seed_with_special_chars() {
         .get("/api/v1/avatar/nanook@claw.inc")
         .dispatch();
     assert_eq!(response.status(), Status::Ok);
+}
+
+// ── Initials Style ──
+
+#[test]
+fn test_initials_png() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/Nanook?style=initials")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::PNG));
+    let bytes = response.into_bytes().unwrap();
+    assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn test_initials_svg() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/Nanook?style=initials&format=svg")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::SVG));
+    let body = response.into_string().unwrap();
+    assert!(body.contains("<text"));
+    assert!(body.contains("NA")); // First two alphanumeric chars uppercased
+}
+
+#[test]
+fn test_initials_deterministic_http() {
+    let client = client();
+    let r1 = client
+        .get("/api/v1/avatar/agent42?style=initials")
+        .dispatch()
+        .into_bytes()
+        .unwrap();
+    let r2 = client
+        .get("/api/v1/avatar/agent42?style=initials")
+        .dispatch()
+        .into_bytes()
+        .unwrap();
+    assert_eq!(r1, r2, "Same seed should produce identical avatar");
+}
+
+#[test]
+fn test_initials_with_bg() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/Test?style=initials&background=ff0000")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}
+
+#[test]
+fn test_initials_numeric_seed() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/42?style=initials&format=svg")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("42")); // Should show "42"
+}
+
+#[test]
+fn test_initials_single_char() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/X?style=initials&format=svg")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("X")); // Single char
+}
+
+#[test]
+fn test_initials_batch() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["Alice", "Bob", "Charlie"], "style": "initials", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    assert_eq!(body["avatars"].as_array().unwrap().len(), 3);
+}
+
+// ── Starburst Style ──
+
+#[test]
+fn test_starburst_png() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/star?style=starburst")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::PNG));
+    let bytes = response.into_bytes().unwrap();
+    assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn test_starburst_svg() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/star?style=starburst&format=svg")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::SVG));
+    let body = response.into_string().unwrap();
+    assert!(body.contains("<path")); // Ray paths
+    assert!(body.contains("<circle")); // Center dot
+}
+
+#[test]
+fn test_starburst_deterministic_http() {
+    let client = client();
+    let r1 = client
+        .get("/api/v1/avatar/burst?style=starburst")
+        .dispatch()
+        .into_bytes()
+        .unwrap();
+    let r2 = client
+        .get("/api/v1/avatar/burst?style=starburst")
+        .dispatch()
+        .into_bytes()
+        .unwrap();
+    assert_eq!(r1, r2);
+}
+
+#[test]
+fn test_starburst_with_bg() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/sun?style=starburst&background=000033")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}
+
+#[test]
+fn test_starburst_custom_size() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/star?style=starburst&size=512")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::PNG));
+}
+
+#[test]
+fn test_starburst_batch() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["sun", "moon", "star"], "style": "starburst", "size": 64, "format": "svg"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 3);
+    for a in avatars {
+        assert!(a["error"].is_null());
+    }
 }

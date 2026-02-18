@@ -106,13 +106,13 @@ class TestStyles(unittest.TestCase):
         self.client = AvatarService()
 
     def test_all_styles_png(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"]:
             data = self.client.generate("test", style=style)
             self.assertIsInstance(data, bytes, f"Style {style} should return bytes")
             self.assertTrue(len(data) > 0, f"Style {style} should return non-empty")
 
     def test_all_styles_svg(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"]:
             data = self.client.generate_svg("test", style=style)
             self.assertIsInstance(data, str, f"Style {style} SVG should return string")
             self.assertTrue(data.startswith("<svg"), f"Style {style} SVG should start with <svg")
@@ -120,13 +120,15 @@ class TestStyles(unittest.TestCase):
     def test_list_styles(self):
         styles = self.client.styles()
         self.assertIsInstance(styles, list)
-        self.assertEqual(len(styles), 5)
+        self.assertEqual(len(styles), 7)
         names = [s["name"] for s in styles]
         self.assertIn("geometric", names)
         self.assertIn("rings", names)
         self.assertIn("robot", names)
         self.assertIn("blockies", names)
         self.assertIn("gradient", names)
+        self.assertIn("initials", names)
+        self.assertIn("starburst", names)
 
     def test_styles_have_description(self):
         styles = self.client.styles()
@@ -231,6 +233,159 @@ class TestDiscovery(unittest.TestCase):
         data = self.client.skills_index()
         self.assertIn("skills", data)
         self.assertIsInstance(data["skills"], list)
+
+
+class TestInitialsStyle(unittest.TestCase):
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_initials_png(self):
+        data = self.client.generate_png("Nanook", style="initials")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_initials_svg(self):
+        data = self.client.generate_svg("Nanook", style="initials")
+        self.assertIn("<text", data)
+        self.assertIn("NA", data)  # Initials are uppercased
+
+    def test_initials_deterministic(self):
+        d1 = self.client.generate("Agent42", style="initials")
+        d2 = self.client.generate("Agent42", style="initials")
+        self.assertEqual(d1, d2)
+
+    def test_initials_different_seeds(self):
+        d1 = self.client.generate("Alice", style="initials")
+        d2 = self.client.generate("Bob", style="initials")
+        self.assertNotEqual(d1, d2)
+
+    def test_initials_numeric_seed(self):
+        data = self.client.generate_svg("42", style="initials")
+        self.assertIn("42", data)
+
+    def test_initials_single_char(self):
+        data = self.client.generate_svg("X", style="initials")
+        self.assertIn("X", data)
+
+    def test_initials_with_bg(self):
+        data = self.client.generate("Test", style="initials", background="ff0000")
+        self.assertIsInstance(data, bytes)
+
+    def test_initials_small(self):
+        data = self.client.generate("AB", style="initials", size=16)
+        self.assertIsInstance(data, bytes)
+
+    def test_initials_large(self):
+        data = self.client.generate("AB", style="initials", size=512)
+        self.assertIsInstance(data, bytes)
+
+    def test_initials_batch(self):
+        results = self.client.batch(["Alice", "Bob", "Charlie"], style="initials", size=64)
+        self.assertEqual(len(results), 3)
+        for item in results:
+            self.assertIsNone(item.get("error"))
+
+    def test_initials_save_png(self):
+        path = "/tmp/avatar_test/initials.png"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.client.save("Nanook", path, style="initials")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(4), b'\x89PNG')
+        os.unlink(path)
+
+    def test_initials_save_svg(self):
+        path = "/tmp/avatar_test/initials.svg"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.client.save("Nanook", path, style="initials")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "r") as f:
+            self.assertIn("<text", f.read())
+        os.unlink(path)
+
+    def test_initials_email_seed(self):
+        """Email-style seeds should extract letters."""
+        data = self.client.generate_svg("nanook@claw.inc", style="initials")
+        self.assertIn("<text", data)
+
+    def test_initials_batch_svg(self):
+        results = self.client.batch(["X", "Y", "Z"], style="initials", fmt="svg")
+        self.assertEqual(len(results), 3)
+        for item in results:
+            decoded = base64.b64decode(item["data"]).decode("utf-8")
+            self.assertIn("<text", decoded)
+
+
+class TestStarburstStyle(unittest.TestCase):
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_starburst_png(self):
+        data = self.client.generate_png("star", style="starburst")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_starburst_svg(self):
+        data = self.client.generate_svg("star", style="starburst")
+        self.assertIn("<path", data)  # Ray paths
+        self.assertIn("<circle", data)  # Center dot
+
+    def test_starburst_deterministic(self):
+        d1 = self.client.generate("burst", style="starburst")
+        d2 = self.client.generate("burst", style="starburst")
+        self.assertEqual(d1, d2)
+
+    def test_starburst_different_seeds(self):
+        d1 = self.client.generate("sun", style="starburst")
+        d2 = self.client.generate("moon", style="starburst")
+        self.assertNotEqual(d1, d2)
+
+    def test_starburst_with_bg(self):
+        data = self.client.generate("star", style="starburst", background="000033")
+        self.assertIsInstance(data, bytes)
+
+    def test_starburst_small(self):
+        data = self.client.generate("star", style="starburst", size=16)
+        self.assertIsInstance(data, bytes)
+
+    def test_starburst_large(self):
+        data = self.client.generate("star", style="starburst", size=512)
+        self.assertIsInstance(data, bytes)
+
+    def test_starburst_batch(self):
+        results = self.client.batch(["sun", "moon", "star"], style="starburst", size=64)
+        self.assertEqual(len(results), 3)
+        for item in results:
+            self.assertIsNone(item.get("error"))
+
+    def test_starburst_save_png(self):
+        path = "/tmp/avatar_test/starburst.png"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.client.save("star", path, style="starburst")
+        self.assertTrue(os.path.exists(path))
+        os.unlink(path)
+
+    def test_starburst_save_svg(self):
+        path = "/tmp/avatar_test/starburst.svg"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.client.save("star", path, style="starburst")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "r") as f:
+            content = f.read()
+            self.assertIn("<path", content)
+        os.unlink(path)
+
+    def test_starburst_batch_svg(self):
+        results = self.client.batch(["a", "b"], style="starburst", fmt="svg")
+        self.assertEqual(len(results), 2)
+        for item in results:
+            decoded = base64.b64decode(item["data"]).decode("utf-8")
+            self.assertIn("<path", decoded)
+
+    def test_starburst_multiple_sizes(self):
+        """Different sizes should all work."""
+        for size in [32, 64, 128, 256]:
+            data = self.client.generate("star", style="starburst", size=size)
+            self.assertIsInstance(data, bytes)
+            self.assertTrue(len(data) > 0)
 
 
 class TestConstructor(unittest.TestCase):
