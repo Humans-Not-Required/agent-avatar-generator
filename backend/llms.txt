@@ -1,0 +1,56 @@
+# Agent Avatar Generator
+> Self-hosted deterministic avatar generation for AI agents
+
+## What This Does
+Generates unique, deterministic avatars from seed strings (agent IDs, emails, names).
+Same input always produces the same avatar. No accounts, no storage, no auth needed.
+
+## Quick Start
+Generate an avatar: GET /api/v1/avatar/{seed}
+Generate as SVG: GET /api/v1/avatar/{seed}?format=svg
+Generate with style: GET /api/v1/avatar/{seed}?style=robot&size=256
+
+## Endpoints
+
+### Generate Avatar
+GET /api/v1/avatar/{seed}
+- Query: style (geometric|rings|robot|blockies|gradient), size (16-1024), format (png|svg), background (hex)
+- Returns: image/png or image/svg+xml
+- No auth required
+
+### List Styles
+GET /api/v1/styles
+- Returns: JSON array of available styles with descriptions
+
+### Batch Generate
+POST /api/v1/avatar/batch
+- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 128, "format": "png"}
+- Returns: JSON with base64-encoded images
+- Max 50 seeds per request
+
+### Health
+GET /api/v1/health
+- Returns: {"status": "ok", "service": "agent-avatar-generator", "version": "..."}
+
+## Styles
+- geometric: 5×5 grid with vertical symmetry (default)
+- rings: Concentric colored rings
+- robot: Procedural robot faces
+- blockies: 8×8 colored grid (Ethereum-style)
+- gradient: Two-color gradient with geometric overlay
+
+## Key Properties
+- Deterministic: same seed → same avatar, always
+- Stateless: no database, no storage
+- No auth: all endpoints are public
+- Cache-friendly: immutable responses with far-future cache headers
+- Rate limited: 200 requests/minute per IP
+
+## Share URLs
+/avatar/view/{seed}?style=geometric&size=256
+- Renders preview page with download links (PNG + SVG)
+
+## Integration
+- OpenAPI: GET /api/v1/openapi.json
+- Skills: GET /.well-known/skills/agent-avatar-generator/SKILL.md
+- Source: https://github.com/Humans-Not-Required/agent-avatar-generator

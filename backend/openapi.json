@@ -1,0 +1,74 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Agent Avatar Generator",
+    "description": "Self-hosted deterministic avatar generation for AI agents",
+    "version": "0.1.0",
+    "license": { "name": "MIT" }
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "paths": {
+    "/avatar/{seed}": {
+      "get": {
+        "summary": "Generate avatar",
+        "description": "Generate a deterministic avatar from a seed string",
+        "parameters": [
+          { "name": "seed", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "style", "in": "query", "schema": { "type": "string", "enum": ["geometric", "rings", "robot", "blockies", "gradient"], "default": "geometric" } },
+          { "name": "size", "in": "query", "schema": { "type": "integer", "minimum": 16, "maximum": 1024, "default": 256 } },
+          { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["png", "svg"], "default": "png" } },
+          { "name": "background", "in": "query", "schema": { "type": "string", "description": "Hex color (e.g. ff0000)" } }
+        ],
+        "responses": {
+          "200": { "description": "Avatar image", "content": { "image/png": {}, "image/svg+xml": {} } },
+          "400": { "description": "Invalid parameters" },
+          "429": { "description": "Rate limit exceeded" }
+        }
+      }
+    },
+    "/avatar/batch": {
+      "post": {
+        "summary": "Batch generate avatars",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["seeds"],
+                "properties": {
+                  "seeds": { "type": "array", "items": { "type": "string" }, "maxItems": 50 },
+                  "style": { "type": "string", "default": "geometric" },
+                  "size": { "type": "integer", "default": 128 },
+                  "format": { "type": "string", "default": "png" },
+                  "background": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Batch results with base64-encoded images" },
+          "400": { "description": "Invalid parameters" },
+          "429": { "description": "Rate limit exceeded" }
+        }
+      }
+    },
+    "/styles": {
+      "get": {
+        "summary": "List available styles",
+        "responses": {
+          "200": { "description": "Array of style objects" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "Service status" }
+        }
+      }
+    }
+  }
+}
