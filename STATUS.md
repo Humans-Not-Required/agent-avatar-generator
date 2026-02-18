@@ -67,7 +67,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - Frontend: GIF format selector + frames/delay sliders with live animated preview
   - SDK: `generate_gif()` + GIF params on all methods
 - **Tests:** 419 Rust (140 unit × 2 binaries + 139 HTTP integration)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 178 integration tests.
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 292 integration tests.
 
 ### Tech Stack
 

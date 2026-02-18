@@ -1281,6 +1281,678 @@ class TestThemeComparison(unittest.TestCase):
         self.assertNotEqual(mono, earth)
 
 
+class TestAnimatedGif(unittest.TestCase):
+    """Tests for animated GIF generation."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_generate_gif_default(self):
+        data = self.client.generate_gif("gif-test")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_generate_gif_via_generate(self):
+        data = self.client.generate("gif-test2", fmt="gif")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_deterministic(self):
+        d1 = self.client.generate_gif("gif-det")
+        d2 = self.client.generate_gif("gif-det")
+        self.assertEqual(d1, d2)
+
+    def test_gif_different_seeds_differ(self):
+        d1 = self.client.generate_gif("gif-a")
+        d2 = self.client.generate_gif("gif-b")
+        self.assertNotEqual(d1, d2)
+
+    def test_gif_all_styles(self):
+        for style in AvatarService.VALID_STYLES:
+            data = self.client.generate_gif(f"gif-{style}", style=style, size=64, frames=3)
+            self.assertEqual(data[:6], b'GIF89a', f"Style {style} didn't produce valid GIF")
+            self.assertGreater(len(data), 100, f"Style {style} GIF too small")
+
+    def test_gif_custom_frames(self):
+        small = self.client.generate_gif("gif-frames", frames=2, size=64)
+        large = self.client.generate_gif("gif-frames", frames=20, size=64)
+        self.assertEqual(small[:6], b'GIF89a')
+        self.assertEqual(large[:6], b'GIF89a')
+        self.assertGreater(len(large), len(small))
+
+    def test_gif_custom_delay(self):
+        fast = self.client.generate_gif("gif-delay", delay=1, size=64, frames=3)
+        slow = self.client.generate_gif("gif-delay", delay=50, size=64, frames=3)
+        self.assertEqual(fast[:6], b'GIF89a')
+        self.assertEqual(slow[:6], b'GIF89a')
+
+    def test_gif_min_frames(self):
+        data = self.client.generate_gif("gif-min", frames=2, size=64)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_max_frames(self):
+        data = self.client.generate_gif("gif-max", frames=30, size=64)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_with_theme(self):
+        """Theme param accepted on GIF endpoint (GIF themes are a no-op currently)."""
+        data = self.client.generate_gif("gif-theme", theme="neon", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertGreater(len(data), 100)
+
+    def test_gif_with_background(self):
+        data = self.client.generate_gif("gif-bg", background="FF0000", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_custom_size(self):
+        data = self.client.generate_gif("gif-size", size=128, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_robot_style_animation(self):
+        """Robot style has eye blink animation."""
+        data = self.client.generate_gif("gif-robot", style="robot", size=64, frames=5)
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertGreater(len(data), 200)
+
+    def test_gif_starburst_style_animation(self):
+        """Starburst style has rotation animation."""
+        data = self.client.generate_gif("gif-star", style="starburst", size=64, frames=5)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_sunset_style_animation(self):
+        """Sunset style has sun movement animation."""
+        data = self.client.generate_gif("gif-sunset", style="sunset", size=64, frames=5)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_pixel_style_animation(self):
+        """Pixel style has color cycle animation."""
+        data = self.client.generate_gif("gif-pixel", style="pixel", size=64, frames=5)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gif_timed(self):
+        data, ms = self.client.generate_timed("gif-timed", fmt="gif", frames=3, size=64)
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertIsInstance(ms, float)
+        self.assertGreater(ms, 0)
+
+    def test_gif_batch(self):
+        result = self.client.batch(["gif-b1", "gif-b2", "gif-b3"], fmt="gif", size=64, frames=3)
+        self.assertEqual(len(result), 3)
+        for item in result:
+            raw = base64.b64decode(item["data"])
+            self.assertEqual(raw[:6], b'GIF89a')
+
+    def test_gif_gallery_zip(self):
+        data = self.client.gallery_zip(["gif-z1", "gif-z2"], fmt="gif", size=64, frames=3)
+        self.assertIsInstance(data, bytes)
+        # ZIP magic bytes
+        self.assertEqual(data[:2], b'PK')
+
+
+class TestGeometricStyle(unittest.TestCase):
+    """Dedicated tests for geometric (default) style."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_geometric_is_default(self):
+        default = self.client.generate("geo-default")
+        explicit = self.client.generate("geo-default", style="geometric")
+        self.assertEqual(default, explicit)
+
+    def test_geometric_png(self):
+        data = self.client.generate("geo-test", style="geometric")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_geometric_svg(self):
+        data = self.client.generate_svg("geo-test", style="geometric")
+        self.assertIn("<svg", data)
+        self.assertIn("rect", data)
+
+    def test_geometric_deterministic(self):
+        d1 = self.client.generate("geo-det", style="geometric")
+        d2 = self.client.generate("geo-det", style="geometric")
+        self.assertEqual(d1, d2)
+
+    def test_geometric_different_seeds(self):
+        d1 = self.client.generate("geo-one", style="geometric")
+        d2 = self.client.generate("geo-two", style="geometric")
+        self.assertNotEqual(d1, d2)
+
+    def test_geometric_small(self):
+        data = self.client.generate("geo-small", style="geometric", size=32)
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_geometric_with_theme(self):
+        plain = self.client.generate("geo-theme", style="geometric", size=64)
+        warm = self.client.generate("geo-theme", style="geometric", size=64, theme="warm")
+        self.assertNotEqual(plain, warm)
+
+    def test_geometric_batch(self):
+        result = self.client.batch(["geo-b1", "geo-b2"], style="geometric", size=64)
+        self.assertEqual(len(result), 2)
+
+    def test_geometric_gif(self):
+        data = self.client.generate_gif("geo-gif", style="geometric", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+
+class TestRingsStyle(unittest.TestCase):
+    """Dedicated tests for rings style."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_rings_png(self):
+        data = self.client.generate("rings-test", style="rings")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_rings_svg(self):
+        data = self.client.generate_svg("rings-test", style="rings")
+        self.assertIn("<svg", data)
+        self.assertIn("circle", data)
+
+    def test_rings_deterministic(self):
+        d1 = self.client.generate("rings-det", style="rings")
+        d2 = self.client.generate("rings-det", style="rings")
+        self.assertEqual(d1, d2)
+
+    def test_rings_different_seeds(self):
+        d1 = self.client.generate("rings-a", style="rings")
+        d2 = self.client.generate("rings-b", style="rings")
+        self.assertNotEqual(d1, d2)
+
+    def test_rings_multiple_sizes(self):
+        for size in [32, 64, 128, 256]:
+            data = self.client.generate("rings-size", style="rings", size=size)
+            self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_rings_with_bg(self):
+        data = self.client.generate("rings-bg", style="rings", background="000000")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_rings_themed(self):
+        data = self.client.generate("rings-theme", style="rings", size=64, theme="ocean")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_rings_gif(self):
+        data = self.client.generate_gif("rings-gif", style="rings", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_rings_batch(self):
+        result = self.client.batch(["rings-b1", "rings-b2", "rings-b3"], style="rings", size=64)
+        self.assertEqual(len(result), 3)
+
+
+class TestBlockiesStyle(unittest.TestCase):
+    """Dedicated tests for blockies style."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_blockies_png(self):
+        data = self.client.generate("blockies-test", style="blockies")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_blockies_svg(self):
+        data = self.client.generate_svg("blockies-test", style="blockies")
+        self.assertIn("<svg", data)
+        self.assertIn("rect", data)
+
+    def test_blockies_deterministic(self):
+        d1 = self.client.generate("blockies-det", style="blockies")
+        d2 = self.client.generate("blockies-det", style="blockies")
+        self.assertEqual(d1, d2)
+
+    def test_blockies_different_seeds(self):
+        d1 = self.client.generate("blockies-a", style="blockies")
+        d2 = self.client.generate("blockies-b", style="blockies")
+        self.assertNotEqual(d1, d2)
+
+    def test_blockies_small(self):
+        data = self.client.generate("blockies-sm", style="blockies", size=32)
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_blockies_themed_all(self):
+        for theme in ["warm", "cool", "neon"]:
+            data = self.client.generate("blockies-th", style="blockies", size=64, theme=theme)
+            self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_blockies_gif(self):
+        data = self.client.generate_gif("blockies-gif", style="blockies", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+
+class TestGradientStyle(unittest.TestCase):
+    """Dedicated tests for gradient style."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_gradient_png(self):
+        data = self.client.generate("grad-test", style="gradient")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_gradient_svg(self):
+        data = self.client.generate_svg("grad-test", style="gradient")
+        self.assertIn("<svg", data)
+        self.assertIn("linearGradient", data.lower().replace("lineargradient", "linearGradient"))
+
+    def test_gradient_deterministic(self):
+        d1 = self.client.generate("grad-det", style="gradient")
+        d2 = self.client.generate("grad-det", style="gradient")
+        self.assertEqual(d1, d2)
+
+    def test_gradient_different_seeds(self):
+        d1 = self.client.generate("grad-a", style="gradient")
+        d2 = self.client.generate("grad-b", style="gradient")
+        self.assertNotEqual(d1, d2)
+
+    def test_gradient_with_bg(self):
+        data = self.client.generate("grad-bg", style="gradient", background="FFFFFF")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_gradient_themed(self):
+        plain = self.client.generate("grad-themed", style="gradient", size=64)
+        pastel = self.client.generate("grad-themed", style="gradient", size=64, theme="pastel")
+        self.assertNotEqual(plain, pastel)
+
+    def test_gradient_gif(self):
+        data = self.client.generate_gif("grad-gif", style="gradient", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+
+    def test_gradient_multiple_sizes(self):
+        sizes = self.client.generate("grad-64", style="gradient", size=64)
+        sizel = self.client.generate("grad-64", style="gradient", size=256)
+        self.assertNotEqual(len(sizes), len(sizel))
+
+
+class TestResponseHeaders(unittest.TestCase):
+    """Test response headers (cache, timing, rate limits)."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_timing_header_on_generate(self):
+        _, ms = self.client.generate_timed("hdr-test", size=64)
+        self.assertIsNotNone(ms)
+        self.assertGreater(ms, 0)
+
+    def test_timing_header_on_batch(self):
+        result = self.client.batch_timed(["hdr-b1", "hdr-b2"], size=64)
+        self.assertIn("generation_ms", result)
+        self.assertIn("count", result)
+        self.assertEqual(result["count"], 2)
+        self.assertGreater(result["generation_ms"], 0)
+
+    def test_timing_header_on_gallery_zip(self):
+        data, ms, count = self.client.gallery_zip_timed(["hdr-z1"], size=64)
+        self.assertIsNotNone(ms)
+        self.assertGreater(ms, 0)
+        self.assertIsNotNone(count)
+
+    def test_timing_on_gif(self):
+        data, ms = self.client.generate_timed("hdr-gif", fmt="gif", frames=3, size=64)
+        self.assertIsNotNone(ms)
+        self.assertGreater(ms, 0)
+
+    def test_batch_count_matches_seeds(self):
+        result = self.client.batch_timed(["cnt-1", "cnt-2", "cnt-3", "cnt-4", "cnt-5"], size=64)
+        self.assertEqual(result["count"], 5)
+
+    def test_timed_svg(self):
+        data, ms = self.client.generate_timed("hdr-svg", fmt="svg", size=64)
+        self.assertIsNotNone(ms)
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+        self.assertIn("<svg", data)
+
+
+class TestDualDiscovery(unittest.TestCase):
+    """Test both discovery paths return consistent content."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_skill_md_exists(self):
+        data = self.client.skill_md()
+        self.assertIn("avatar", data.lower())
+
+    def test_llms_txt_exists(self):
+        data = self.client.llms_txt()
+        self.assertIn("avatar", data.lower())
+
+    def test_openapi_structure(self):
+        data = self.client.openapi()
+        self.assertIn("openapi", data)
+        self.assertIn("paths", data)
+        self.assertIn("info", data)
+        self.assertIn("title", data["info"])
+
+    def test_openapi_has_avatar_endpoint(self):
+        data = self.client.openapi()
+        paths = data["paths"]
+        avatar_paths = [p for p in paths if "avatar" in p]
+        self.assertGreater(len(avatar_paths), 0)
+
+    def test_skills_index_structure(self):
+        data = self.client.skills_index()
+        self.assertIn("skills", data)
+        self.assertGreater(len(data["skills"]), 0)
+
+    def test_llms_txt_mentions_endpoints(self):
+        data = self.client.llms_txt()
+        self.assertIn("/api/v1/avatar", data)
+
+    def test_skill_md_mentions_styles(self):
+        data = self.client.skill_md()
+        self.assertIn("style", data.lower())
+
+    def test_openapi_version(self):
+        data = self.client.openapi()
+        self.assertTrue(data["openapi"].startswith("3."))
+
+
+class TestErrorHandling(unittest.TestCase):
+    """Test error handling edge cases."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_invalid_style_error(self):
+        with self.assertRaises(ValidationError) as ctx:
+            self.client.generate("err-style", style="nonexistent")
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_invalid_format_error(self):
+        with self.assertRaises(ValidationError) as ctx:
+            self.client.generate("err-fmt", fmt="bmp")
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_size_below_minimum(self):
+        with self.assertRaises(ValidationError):
+            self.client.generate("err-size", size=8)
+
+    def test_size_above_maximum(self):
+        with self.assertRaises(ValidationError):
+            self.client.generate("err-size", size=10000)
+
+    def test_batch_too_many_seeds(self):
+        seeds = [f"err-{i}" for i in range(51)]
+        with self.assertRaises(ValidationError):
+            self.client.batch(seeds)
+
+    def test_batch_empty_seeds(self):
+        with self.assertRaises(ValidationError):
+            self.client.batch([])
+
+    def test_invalid_theme_error(self):
+        with self.assertRaises(ValidationError):
+            self.client.generate("err-theme", theme="nonexistent")
+
+    def test_gallery_zip_empty_seeds(self):
+        with self.assertRaises(ValidationError):
+            self.client.gallery_zip([])
+
+    def test_gallery_zip_too_many_seeds(self):
+        seeds = [f"err-gz-{i}" for i in range(51)]
+        with self.assertRaises(ValidationError):
+            self.client.gallery_zip(seeds)
+
+
+class TestCrossFeatInteractions(unittest.TestCase):
+    """Test combinations of features working together."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_gif_with_all_themes(self):
+        for theme in AvatarService.VALID_THEMES:
+            data = self.client.generate_gif(f"cross-{theme}", theme=theme, size=64, frames=3)
+            self.assertEqual(data[:6], b'GIF89a', f"Theme {theme} GIF failed")
+
+    def test_themed_gif_accepted(self):
+        """Theme param accepted on GIF (themes are no-op for GIF currently)."""
+        data = self.client.generate_gif("cross-plain", theme="warm", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertGreater(len(data), 100)
+
+    def test_batch_gif_themed(self):
+        result = self.client.batch(["cross-bg1", "cross-bg2"], fmt="gif", theme="cool", size=64, frames=3)
+        self.assertEqual(len(result), 2)
+        for item in result:
+            raw = base64.b64decode(item["data"])
+            self.assertEqual(raw[:6], b'GIF89a')
+
+    def test_all_formats_same_seed(self):
+        png = self.client.generate("cross-fmt", size=64)
+        svg = self.client.generate_svg("cross-fmt", size=64)
+        gif = self.client.generate_gif("cross-fmt", size=64, frames=3)
+        self.assertEqual(png[:4], b'\x89PNG')
+        self.assertIn("<svg", svg)
+        self.assertEqual(gif[:6], b'GIF89a')
+
+    def test_theme_plus_bg_override(self):
+        # Theme + bg override should produce valid output
+        data = self.client.generate("cross-tb", style="robot", size=64, theme="neon", background="000000")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_gallery_zip_gif_format(self):
+        data = self.client.gallery_zip(["cross-zg1", "cross-zg2"], fmt="gif", size=64, frames=3)
+        self.assertEqual(data[:2], b'PK')
+
+    def test_save_gif(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
+            path = f.name
+        try:
+            self.client.save("cross-save-gif", path, fmt="gif", size=64, frames=3)
+            with open(path, "rb") as f:
+                data = f.read()
+            self.assertEqual(data[:6], b'GIF89a')
+        finally:
+            os.unlink(path)
+
+    def test_gallery_zip_themed_gif(self):
+        data = self.client.gallery_zip(["cross-ztg1"], style="robot", fmt="gif", theme="warm", size=64, frames=3)
+        self.assertEqual(data[:2], b'PK')
+
+    def test_timed_gif_themed(self):
+        data, ms = self.client.generate_timed("cross-tgt", fmt="gif", theme="forest", size=64, frames=3)
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertIsNotNone(ms)
+        self.assertGreater(ms, 0)
+
+
+class TestUnicodeSeeds(unittest.TestCase):
+    """Test Unicode and special character handling in seeds."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_cjk_seed(self):
+        data = self.client.generate("你好世界")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_emoji_seed(self):
+        data = self.client.generate("🤖🔥❄️")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_arabic_seed(self):
+        data = self.client.generate("مرحبا")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_cyrillic_seed(self):
+        data = self.client.generate("Привет мир")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_mixed_unicode(self):
+        data = self.client.generate("Hello你好مرحبا🤖")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_unicode_deterministic(self):
+        d1 = self.client.generate("🎭")
+        d2 = self.client.generate("🎭")
+        self.assertEqual(d1, d2)
+
+    def test_unicode_different_scripts_differ(self):
+        d1 = self.client.generate("hello")
+        d2 = self.client.generate("你好")
+        self.assertNotEqual(d1, d2)
+
+    def test_url_encoded_seed(self):
+        data = self.client.generate("hello world/test")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+    def test_empty_like_seed(self):
+        data = self.client.generate(" ")
+        self.assertEqual(data[:4], b'\x89PNG')
+
+
+class TestBatchAdvanced(unittest.TestCase):
+    """Advanced batch generation tests."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_batch_single_seed(self):
+        result = self.client.batch(["single"], size=64)
+        self.assertEqual(len(result), 1)
+
+    def test_batch_max_seeds(self):
+        seeds = [f"max-{i}" for i in range(50)]
+        result = self.client.batch(seeds, size=32)
+        self.assertEqual(len(result), 50)
+
+    def test_batch_matches_individual(self):
+        """Batch results should match individual generation."""
+        seeds = ["match-a", "match-b"]
+        batch_result = self.client.batch(seeds, style="rings", size=64)
+        for i, seed in enumerate(seeds):
+            individual = self.client.generate(seed, style="rings", size=64)
+            batch_data = base64.b64decode(batch_result[i]["data"])
+            self.assertEqual(individual, batch_data, f"Mismatch for seed {seed}")
+
+    def test_batch_all_styles(self):
+        for style in AvatarService.VALID_STYLES:
+            result = self.client.batch(["batch-style-test"], style=style, size=64)
+            self.assertEqual(len(result), 1, f"Style {style} batch failed")
+
+    def test_batch_timed_structure(self):
+        result = self.client.batch_timed(["bt-1", "bt-2"], size=64)
+        self.assertIn("avatars", result)
+        self.assertIn("count", result)
+        self.assertIn("generation_ms", result)
+        self.assertIsInstance(result["avatars"], list)
+        self.assertEqual(result["count"], 2)
+
+    def test_batch_svg_content(self):
+        result = self.client.batch(["svg-batch"], fmt="svg", size=64)
+        self.assertEqual(len(result), 1)
+        svg_text = base64.b64decode(result[0]["data"]).decode("utf-8")
+        self.assertIn("<svg", svg_text)
+
+    def test_batch_with_bg_and_theme(self):
+        result = self.client.batch(["bg-th-1", "bg-th-2"], size=64, background="112233", theme="pastel")
+        self.assertEqual(len(result), 2)
+
+
+class TestGalleryZipAdvanced(unittest.TestCase):
+    """Advanced gallery ZIP tests."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_gallery_zip_all_styles_count(self):
+        """style='all' generates all 10 styles per seed."""
+        data = self.client.gallery_zip(["gz-all-1"], style="all", size=32)
+        self.assertEqual(data[:2], b'PK')
+
+    def test_gallery_zip_timed_structure(self):
+        data, ms, count = self.client.gallery_zip_timed(["gz-t1", "gz-t2"], size=32)
+        self.assertEqual(data[:2], b'PK')
+        self.assertGreater(ms, 0)
+        self.assertIsNotNone(count)
+
+    def test_gallery_zip_save_roundtrip(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as f:
+            path = f.name
+        try:
+            self.client.gallery_zip_save(["gz-save"], path, size=32)
+            with open(path, "rb") as f:
+                data = f.read()
+            self.assertEqual(data[:2], b'PK')
+            self.assertGreater(len(data), 100)
+        finally:
+            os.unlink(path)
+
+    def test_gallery_zip_themed_all_styles(self):
+        data = self.client.gallery_zip(["gz-themed"], style="all", theme="earth", size=32)
+        self.assertEqual(data[:2], b'PK')
+
+    def test_gallery_zip_multiple_seeds_svg(self):
+        data = self.client.gallery_zip(["gz-s1", "gz-s2", "gz-s3"], fmt="svg", size=64)
+        self.assertEqual(data[:2], b'PK')
+
+    def test_gallery_zip_deterministic(self):
+        d1 = self.client.gallery_zip(["gz-det"], size=32)
+        d2 = self.client.gallery_zip(["gz-det"], size=32)
+        self.assertEqual(d1, d2)
+
+
+class TestHealthAdvanced(unittest.TestCase):
+    """Advanced health endpoint tests."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_health_fields(self):
+        data = self.client.health()
+        self.assertIn("service", data)
+        self.assertIn("status", data)
+        self.assertIn("version", data)
+        self.assertEqual(data["service"], "agent-avatar-generator")
+        self.assertEqual(data["status"], "ok")
+
+    def test_health_version_format(self):
+        data = self.client.health()
+        version = data["version"]
+        parts = version.split(".")
+        self.assertEqual(len(parts), 3, f"Version {version} not semver")
+
+
+class TestStylesAdvanced(unittest.TestCase):
+    """Advanced styles endpoint tests."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_all_10_styles_listed(self):
+        data = self.client.styles()
+        style_names = {s["name"] for s in data}
+        self.assertEqual(style_names, AvatarService.VALID_STYLES)
+
+    def test_each_style_has_description(self):
+        data = self.client.styles()
+        for style in data:
+            self.assertIn("name", style)
+            self.assertIn("description", style)
+            self.assertGreater(len(style["description"]), 0)
+
+    def test_styles_count(self):
+        data = self.client.styles()
+        self.assertEqual(len(data), 10)
+
+
+class TestThemesAdvanced(unittest.TestCase):
+    """Advanced themes endpoint tests."""
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_all_9_themes_listed(self):
+        data = self.client.themes()
+        theme_names = {t["name"] for t in data}
+        self.assertEqual(theme_names, AvatarService.VALID_THEMES)
+
+    def test_each_theme_has_description(self):
+        data = self.client.themes()
+        for theme in data:
+            self.assertIn("name", theme)
+            self.assertIn("description", theme)
+            self.assertGreater(len(theme["description"]), 0)
+
+    def test_themes_count(self):
+        data = self.client.themes()
+        self.assertEqual(len(data), 9)
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()
