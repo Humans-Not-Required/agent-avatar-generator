@@ -28,15 +28,18 @@ GET /api/v1/themes
 
 ### Batch Generate
 POST /api/v1/avatar/batch
-- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 128, "format": "png"}
-- Returns: JSON with base64-encoded images
+- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 128, "format": "png", "theme": "warm"}
+- Returns: JSON with base64-encoded images, generation_ms, and count
+- Images generated in parallel for performance
 - Max 50 seeds per request
 
 ### Gallery ZIP Download
 POST /api/v1/avatar/gallery/zip
-- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 256, "format": "png"}
+- Body: {"seeds": ["a","b","c"], "style": "geometric", "size": 256, "format": "png", "theme": "warm"}
 - Use style: "all" to include every style for each seed
 - Returns: application/zip with avatar files
+- Images generated in parallel, ZIP assembled sequentially
+- Headers: X-Generation-Time-Ms, X-Avatar-Count
 - Max 50 seeds per request
 - Filenames: {seed}.{format} or {seed}_{style}.{format} (when style="all")
 
@@ -79,6 +82,7 @@ Same seed + same theme = same output (deterministic).
 - No auth: all endpoints are public
 - Cache-friendly: immutable responses with far-future cache headers
 - Rate limited: 200 requests/minute per IP
+- Performance: parallel generation for batch/ZIP, timing headers (X-Generation-Time-Ms)
 
 ## Share URLs
 /avatar/view/{seed}?style=geometric&size=256

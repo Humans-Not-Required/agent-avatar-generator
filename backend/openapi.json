@@ -11,16 +11,24 @@
     "/avatar/{seed}": {
       "get": {
         "summary": "Generate avatar",
-        "description": "Generate a deterministic avatar from a seed string",
+        "description": "Generate a deterministic avatar from a seed string. Returns X-Generation-Time-Ms header with generation time in milliseconds.",
         "parameters": [
           { "name": "seed", "in": "path", "required": true, "schema": { "type": "string" } },
           { "name": "style", "in": "query", "schema": { "type": "string", "enum": ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"], "default": "geometric" } },
           { "name": "size", "in": "query", "schema": { "type": "integer", "minimum": 16, "maximum": 1024, "default": 256 } },
           { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["png", "svg"], "default": "png" } },
-          { "name": "background", "in": "query", "schema": { "type": "string", "description": "Hex color (e.g. ff0000)" } }
+          { "name": "background", "in": "query", "schema": { "type": "string", "description": "Hex color (e.g. ff0000)" } },
+          { "name": "theme", "in": "query", "schema": { "type": "string", "enum": ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"], "description": "Color theme applied via post-processing" } }
         ],
         "responses": {
-          "200": { "description": "Avatar image", "content": { "image/png": {}, "image/svg+xml": {} } },
+          "200": {
+            "description": "Avatar image",
+            "content": { "image/png": {}, "image/svg+xml": {} },
+            "headers": {
+              "X-Generation-Time-Ms": { "schema": { "type": "number" }, "description": "Avatar generation time in milliseconds" },
+              "Cache-Control": { "schema": { "type": "string" }, "description": "public, max-age=31536000, immutable" }
+            }
+          },
           "400": { "description": "Invalid parameters" },
           "429": { "description": "Rate limit exceeded" }
         }
@@ -29,6 +37,7 @@
     "/avatar/batch": {
       "post": {
         "summary": "Batch generate avatars",
+        "description": "Generate multiple avatars in parallel. Response includes generation timing.",
         "requestBody": {
           "required": true,
           "content": {
@@ -41,14 +50,29 @@
                   "style": { "type": "string", "default": "geometric" },
                   "size": { "type": "integer", "default": 128 },
                   "format": { "type": "string", "default": "png" },
-                  "background": { "type": "string" }
+                  "background": { "type": "string" },
+                  "theme": { "type": "string", "description": "Color theme name" }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Batch results with base64-encoded images" },
+          "200": {
+            "description": "Batch results with base64-encoded images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "avatars": { "type": "array", "items": { "type": "object", "properties": { "seed": { "type": "string" }, "data": { "type": "string" }, "format": { "type": "string" } } } },
+                    "generation_ms": { "type": "number", "description": "Total generation time in milliseconds" },
+                    "count": { "type": "integer", "description": "Number of avatars generated" }
+                  }
+                }
+              }
+            }
+          },
           "400": { "description": "Invalid parameters" },
           "429": { "description": "Rate limit exceeded" }
         }
@@ -57,7 +81,7 @@
     "/avatar/gallery/zip": {
       "post": {
         "summary": "Download gallery as ZIP",
-        "description": "Generate multiple avatars and download as a ZIP file. Use style='all' to include every style.",
+        "description": "Generate multiple avatars in parallel and download as a ZIP file. Use style='all' to include every style. Returns X-Generation-Time-Ms and X-Avatar-Count headers.",
         "requestBody": {
           "required": true,
           "content": {
@@ -70,14 +94,22 @@
                   "style": { "type": "string", "default": "geometric", "description": "Style name or 'all' for every style" },
                   "size": { "type": "integer", "default": 256, "minimum": 16, "maximum": 1024 },
                   "format": { "type": "string", "enum": ["png", "svg"], "default": "png" },
-                  "background": { "type": "string", "description": "Hex color (e.g. ff0000)" }
+                  "background": { "type": "string", "description": "Hex color (e.g. ff0000)" },
+                  "theme": { "type": "string", "description": "Color theme name" }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "ZIP file containing avatar images", "content": { "application/zip": {} } },
+          "200": {
+            "description": "ZIP file containing avatar images",
+            "content": { "application/zip": {} },
+            "headers": {
+              "X-Generation-Time-Ms": { "schema": { "type": "number" }, "description": "Total generation time in milliseconds" },
+              "X-Avatar-Count": { "schema": { "type": "integer" }, "description": "Number of avatars in the ZIP" }
+            }
+          },
           "400": { "description": "Invalid parameters" },
           "429": { "description": "Rate limit exceeded" }
         }
@@ -88,6 +120,14 @@
         "summary": "List available styles",
         "responses": {
           "200": { "description": "Array of style objects" }
+        }
+      }
+    },
+    "/themes": {
+      "get": {
+        "summary": "List available color themes",
+        "responses": {
+          "200": { "description": "Array of theme objects" }
         }
       }
     },
