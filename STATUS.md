@@ -1,8 +1,8 @@
 # Agent Avatar Generator - Status
 
-## Current State: 10 Styles, 9 Color Themes, Gallery ZIP ✅
+## Current State: 10 Styles, 9 Color Themes, Animated GIF, Gallery ZIP ✅
 
-Self-hosted deterministic avatar generation service with 10 styles, 9 color themes, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
+Self-hosted deterministic avatar generation service with 10 styles, 9 color themes, PNG/SVG/GIF output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
 ### What's Done
 
@@ -22,7 +22,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - `mosaic` — 6×6 grid of geometric shapes with harmonious color palettes (complementary/triadic/analogous/split-complementary)
   - `pixel` — Retro pixel art creatures with horizontal symmetry, 11×11 grid, 3-color palette, visible pixel gaps (space-invader inspired)
   - `sunset` — Layered horizon bands using harmonious color palette, wavy edges between bands, optional sun with glow effect
-- **Output Formats:** PNG + SVG for all styles
+- **Output Formats:** PNG + SVG + animated GIF for all styles
 - **Deterministic:** Same seed → identical output, always. SHA-256 hashing.
 - **Rate Limiting:** 200 req/min per IP with headers
 - **Cache Headers:** Immutable, far-future (1 year)
@@ -57,13 +57,22 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - All styles: style × theme matrix (10 styles × 10 themes = 100 avatars)
   - Shareable comparison URLs (?mode=compare&seed=X&style=Y)
   - Theme selector added to Gallery mode
-- **Tests:** 375 Rust (123 unit × 2 binaries + 129 HTTP integration)
+- **Animated GIF Avatars** — `?format=gif&frames=10&delay=8`
+  - 6 custom per-style animations: rings (pulsate), robot (eye blink), starburst (rotate), gradient (angle rotate), pixel (color cycle), sunset (sun movement + color shift)
+  - Generic brightness pulse for styles without custom animation
+  - GIF encoding via `gif` crate with NeuQuant color quantization (256-color)
+  - Configurable frames (2-30) and delay (1-100 centiseconds)
+  - `X-Frame-Count` header on GIF responses
+  - Deterministic: same seed + params = identical GIF
+  - Frontend: GIF format selector + frames/delay sliders with live animated preview
+  - SDK: `generate_gif()` + GIF params on all methods
+- **Tests:** 419 Rust (140 unit × 2 binaries + 139 HTTP integration)
 - ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 178 integration tests.
 
 ### Tech Stack
 
 - Rust 1.83+ / Rocket 0.5 (no database — pure stateless)
-- Image generation: `image` crate (PNG), string templates (SVG)
+- Image generation: `image` crate (PNG), string templates (SVG), `gif` crate with `color_quant` (animated GIF)
 - Hashing: `sha2` (SHA-256 for deterministic seeds)
 - Color harmony: HSL color space with complementary/triadic/analogous/split-complementary palettes
 - Embedded 5×7 bitmap font for initials style (A-Z, 0-9, no dependencies)
@@ -77,7 +86,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - ~~Color themes: user-specified palette/mood presets~~ ✅ Done (9 themes)
 - ~~Comparison mode: side-by-side before/after theme comparison~~ ✅ Done (Compare mode UI)
 - ~~Additional robot antenna styles and eye glow effects~~ ✅ Done (6 antenna styles + 3 glow levels)
-- Animated avatar support (GIF/APNG)
+- ~~Animated avatar support (GIF/APNG)~~ ✅ Done (GIF with per-style animations)
 
 ### ⚠️ Gotchas
 
