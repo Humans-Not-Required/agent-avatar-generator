@@ -18,6 +18,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
         working-directory: backend/
+        env:
+          RATE_LIMIT_MAX: "10000"
       - run: cargo clippy -- -D warnings
         working-directory: backend/
 
@@ -35,7 +37,7 @@ jobs:
         working-directory: backend/
       - name: Start server
         run: |
-          ./backend/target/release/agent-avatar-generator &
+          RATE_LIMIT_MAX=10000 ./backend/target/release/agent-avatar-generator &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
           for i in $(seq 1 30); do
             curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1 && break || sleep 1

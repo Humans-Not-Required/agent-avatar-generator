@@ -48,6 +48,7 @@ class AvatarService:
 
     VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"}
     VALID_FORMATS = {"png", "svg"}
+    VALID_THEMES = {"warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"}
 
     def __init__(self, base_url=None, timeout=30):
         self.base_url = (base_url or os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")).rstrip("/")
@@ -94,35 +95,39 @@ class AvatarService:
 
     # ── Core API ──
 
-    def generate(self, seed, style="geometric", size=256, fmt="png", background=None):
+    def generate(self, seed, style="geometric", size=256, fmt="png", background=None, theme=None):
         """Generate an avatar. Returns bytes (PNG) or string (SVG)."""
         params = {"style": style, "size": size, "format": fmt}
         if background:
             params["background"] = background
+        if theme:
+            params["theme"] = theme
         qs = urlencode(params)
         data, status, headers = self._request("GET", f"/api/v1/avatar/{quote(seed, safe='')}?{qs}")
         return data
 
-    def generate_png(self, seed, style="geometric", size=256, background=None):
+    def generate_png(self, seed, style="geometric", size=256, background=None, theme=None):
         """Generate a PNG avatar. Returns bytes."""
-        return self.generate(seed, style=style, size=size, fmt="png", background=background)
+        return self.generate(seed, style=style, size=size, fmt="png", background=background, theme=theme)
 
-    def generate_svg(self, seed, style="geometric", size=256, background=None):
+    def generate_svg(self, seed, style="geometric", size=256, background=None, theme=None):
         """Generate an SVG avatar. Returns string."""
-        data = self.generate(seed, style=style, size=size, fmt="svg", background=background)
+        data = self.generate(seed, style=style, size=size, fmt="svg", background=background, theme=theme)
         if isinstance(data, bytes):
             return data.decode("utf-8")
         return data
 
-    def batch(self, seeds, style="geometric", size=128, fmt="png", background=None):
+    def batch(self, seeds, style="geometric", size=128, fmt="png", background=None, theme=None):
         """Batch generate avatars. Returns list of dicts with base64-encoded data."""
         body = {"seeds": seeds, "style": style, "size": size, "format": fmt}
         if background:
             body["background"] = background
+        if theme:
+            body["theme"] = theme
         data, status, headers = self._request("POST", "/api/v1/avatar/batch", body=body)
         return data["avatars"]
 
-    def gallery_zip(self, seeds, style="geometric", size=256, fmt="png", background=None):
+    def gallery_zip(self, seeds, style="geometric", size=256, fmt="png", background=None, theme=None):
         """Download multiple avatars as a ZIP file. Returns bytes.
 
         Args:
@@ -131,6 +136,7 @@ class AvatarService:
             size: Avatar size in pixels.
             fmt: "png" or "svg".
             background: Optional hex color (e.g. "ff0000").
+            theme: Optional color theme name.
 
         Returns:
             bytes: ZIP file contents.
@@ -138,10 +144,12 @@ class AvatarService:
         body = {"seeds": seeds, "style": style, "size": size, "format": fmt}
         if background:
             body["background"] = background
+        if theme:
+            body["theme"] = theme
         data, status, headers = self._request("POST", "/api/v1/avatar/gallery/zip", body=body)
         return data
 
-    def gallery_zip_save(self, seeds, path, style="geometric", size=256, fmt="png", background=None):
+    def gallery_zip_save(self, seeds, path, style="geometric", size=256, fmt="png", background=None, theme=None):
         """Download gallery ZIP and save to file.
 
         Args:
@@ -151,11 +159,12 @@ class AvatarService:
             size: Avatar size.
             fmt: "png" or "svg".
             background: Optional hex color.
+            theme: Optional color theme name.
 
         Returns:
             str: Path to saved file.
         """
-        data = self.gallery_zip(seeds, style=style, size=size, fmt=fmt, background=background)
+        data = self.gallery_zip(seeds, style=style, size=size, fmt=fmt, background=background, theme=theme)
         with open(path, "wb") as f:
             f.write(data)
         return path
@@ -165,11 +174,16 @@ class AvatarService:
         data, status, headers = self._request("GET", "/api/v1/styles")
         return data
 
-    def save(self, seed, path, style="geometric", size=256, fmt=None, background=None):
+    def themes(self):
+        """List available color themes."""
+        data, status, headers = self._request("GET", "/api/v1/themes")
+        return data
+
+    def save(self, seed, path, style="geometric", size=256, fmt=None, background=None, theme=None):
         """Generate and save avatar to file."""
         if fmt is None:
             fmt = "svg" if path.endswith(".svg") else "png"
-        data = self.generate(seed, style=style, size=size, fmt=fmt, background=background)
+        data = self.generate(seed, style=style, size=size, fmt=fmt, background=background, theme=theme)
         mode = "w" if isinstance(data, str) else "wb"
         with open(path, mode) as f:
             f.write(data)

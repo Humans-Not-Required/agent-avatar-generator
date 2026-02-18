@@ -1,8 +1,10 @@
 use crate::avatar;
 use crate::rate_limit::{RateGuard, RateLimited};
 use crate::styles::{self, DEFAULT_SIZE, DEFAULT_STYLE, MAX_SIZE, MIN_SIZE};
+use crate::theme::{self, Theme};
 
 use base64::Engine;
+use image::ImageFormat;
 use rocket::http::{ContentType, Header, Status};
 use rocket::response::content::{RawHtml, RawText};
 use rocket::response::{self, Responder, Response};
@@ -94,6 +96,37 @@ fn validate_params(
     Ok((style, size))
 }
 
+fn parse_theme(theme: &Option<String>) -> Result<Option<Theme>, (Status, Json<ApiError>)> {
+    match theme {
+        None => Ok(None),
+        Some(name) => {
+            Theme::parse(name).map(Some).ok_or_else(|| (
+                Status::BadRequest,
+                Json(ApiError {
+                    error: format!("Unknown theme: {name}"),
+                    detail: Some("Valid themes: warm, cool, ocean, forest, sunset, neon, pastel, monochrome, earth".to_string()),
+                }),
+            ))
+        }
+    }
+}
+
+/// Generate a themed PNG from an image (avoids double encode/decode).
+fn themed_png(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>, t: &Theme) -> Result<Vec<u8>, String> {
+    let mut img = avatar::generate_image(seed, style, size, bg)?;
+    t.apply_to_image(&mut img);
+    let mut buf = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
+        .map_err(|e| format!("PNG encoding error: {e}"))?;
+    Ok(buf)
+}
+
+/// Generate a themed SVG (remap all hex colors in the SVG string).
+fn themed_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>, t: &Theme) -> Result<String, String> {
+    let svg = avatar::generate_svg(seed, style, size, bg)?;
+    Ok(t.apply_to_svg(&svg))
+}
+
 const CACHE_HEADER: &str = "public, max-age=31536000, immutable";
 
 // Type aliases to reduce complexity warnings
@@ -103,47 +136,57 @@ type RatedApiResult<T> = Result<RateLimited<ApiResult<T>>, (Status, Json<ApiErro
 // ── Routes ──
 
 /// GET /api/v1/avatar/<seed> — generate avatar (PNG default)
-#[get("/avatar/<seed>?<style>&<size>&<format>&<background>")]
+#[get("/avatar/<seed>?<style>&<size>&<format>&<background>&<theme>")]
 pub fn generate_avatar(
     seed: &str,
     style: Option<String>,
     size: Option<u32>,
     format: Option<String>,
     background: Option<String>,
+    theme: Option<String>,
     rate: RateGuard,
 ) -> RatedApiResult<ImageResponseOrSvg> {
     let (style, size) = validate_params(&style, &size)?;
     let bg = parse_bg(&background);
+    let t = parse_theme(&theme)?;
     let fmt = format.as_deref().unwrap_or("png");
 
     let inner = match fmt {
-        "svg" => match avatar::generate_svg(seed, &style, size, bg) {
-            Ok(svg) => Ok(ImageResponseOrSvg::Svg(SvgResponse {
-                body: svg,
-                cache_control: CACHE_HEADER.to_string(),
-            })),
-            Err(e) => Err((
-                Status::InternalServerError,
-                Json(ApiError {
-                    error: e,
-                    detail: None,
-                }),
-            )),
-        },
-        "png" => match avatar::generate_png(seed, &style, size, bg) {
-            Ok(bytes) => Ok(ImageResponseOrSvg::Png(ImageResponse {
-                bytes,
-                content_type: ContentType::PNG,
-                cache_control: CACHE_HEADER.to_string(),
-            })),
-            Err(e) => Err((
-                Status::InternalServerError,
-                Json(ApiError {
-                    error: e,
-                    detail: None,
-                }),
-            )),
-        },
+        "svg" => {
+            let result = if let Some(ref t) = t {
+                themed_svg(seed, &style, size, bg, t)
+            } else {
+                avatar::generate_svg(seed, &style, size, bg)
+            };
+            match result {
+                Ok(svg) => Ok(ImageResponseOrSvg::Svg(SvgResponse {
+                    body: svg,
+                    cache_control: CACHE_HEADER.to_string(),
+                })),
+                Err(e) => Err((
+                    Status::InternalServerError,
+                    Json(ApiError { error: e, detail: None }),
+                )),
+            }
+        }
+        "png" => {
+            let result = if let Some(ref t) = t {
+                themed_png(seed, &style, size, bg, t)
+            } else {
+                avatar::generate_png(seed, &style, size, bg)
+            };
+            match result {
+                Ok(bytes) => Ok(ImageResponseOrSvg::Png(ImageResponse {
+                    bytes,
+                    content_type: ContentType::PNG,
+                    cache_control: CACHE_HEADER.to_string(),
+                })),
+                Err(e) => Err((
+                    Status::InternalServerError,
+                    Json(ApiError { error: e, detail: None }),
+                )),
+            }
+        }
         _ => Err((
             Status::BadRequest,
             Json(ApiError {
@@ -243,6 +286,12 @@ pub fn list_styles() -> Json<Vec<styles::StyleInfo>> {
     Json(styles::available_styles())
 }
 
+/// GET /api/v1/themes — list available color themes
+#[get("/themes")]
+pub fn list_themes() -> Json<Vec<theme::ThemeInfo>> {
+    Json(theme::available_themes())
+}
+
 /// POST /api/v1/avatar/batch — batch generate avatars
 #[post("/avatar/batch", format = "json", data = "<req>")]
 pub fn batch_generate(
@@ -310,14 +359,29 @@ pub fn batch_generate(
     }
 
     let bg = parse_bg(&req.background);
+    let t = req.theme.as_ref().and_then(|n| Theme::parse(n));
 
     let mut results = Vec::new();
     for seed in &req.seeds {
         let data = match format {
-            "svg" => avatar::generate_svg(seed, style, size, bg)
-                .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes())),
-            _ => avatar::generate_png(seed, style, size, bg)
-                .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes)),
+            "svg" => {
+                if let Some(ref t) = t {
+                    themed_svg(seed, style, size, bg, t)
+                        .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
+                } else {
+                    avatar::generate_svg(seed, style, size, bg)
+                        .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
+                }
+            }
+            _ => {
+                if let Some(ref t) = t {
+                    themed_png(seed, style, size, bg, t)
+                        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+                } else {
+                    avatar::generate_png(seed, style, size, bg)
+                        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+                }
+            }
         };
 
         match data {
@@ -394,6 +458,7 @@ pub fn gallery_zip(
 
     let size = req.size.unwrap_or(DEFAULT_SIZE).clamp(MIN_SIZE, MAX_SIZE);
     let bg = parse_bg(&req.background);
+    let t = req.theme.as_ref().and_then(|n| Theme::parse(n));
 
     // Determine which styles to include
     let all_mode = req.style.as_deref() == Some("all");
@@ -435,9 +500,20 @@ pub fn gallery_zip(
                 };
 
                 let data = match format {
-                    "svg" => avatar::generate_svg(seed, style, size, bg)
-                        .map(|s| s.into_bytes()),
-                    _ => avatar::generate_png(seed, style, size, bg),
+                    "svg" => {
+                        if let Some(ref t) = t {
+                            themed_svg(seed, style, size, bg, t).map(|s| s.into_bytes())
+                        } else {
+                            avatar::generate_svg(seed, style, size, bg).map(|s| s.into_bytes())
+                        }
+                    }
+                    _ => {
+                        if let Some(ref t) = t {
+                            themed_png(seed, style, size, bg, t)
+                        } else {
+                            avatar::generate_png(seed, style, size, bg)
+                        }
+                    }
                 };
 
                 match data {
@@ -593,6 +669,7 @@ pub struct BatchRequest {
     pub size: Option<u32>,
     pub format: Option<String>,
     pub background: Option<String>,
+    pub theme: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -616,6 +693,7 @@ pub struct GalleryZipRequest {
     pub size: Option<u32>,
     pub format: Option<String>,
     pub background: Option<String>,
+    pub theme: Option<String>,
 }
 
 /// Build a Rocket instance for testing.
@@ -650,6 +728,7 @@ pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
                 generate_avatar_png,
                 generate_avatar_svg,
                 list_styles,
+                list_themes,
                 batch_generate,
                 gallery_zip,
             ],

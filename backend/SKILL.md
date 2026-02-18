@@ -19,6 +19,7 @@ GET /api/v1/avatar/{seed}?style=geometric&size=256&format=png
 - `size` (query): 16–1024 pixels (default: 256)
 - `format` (query): `png` | `svg` (default: `png`)
 - `background` (query): Hex color override (e.g., `ff0000`)
+- `theme` (query): Color theme — `warm` | `cool` | `ocean` | `forest` | `sunset` | `neon` | `pastel` | `monochrome` | `earth` (optional)
 
 **Response:** Image bytes (`image/png` or `image/svg+xml`)
 
@@ -35,6 +36,11 @@ Content-Type: application/json
 ### List Styles
 ```
 GET /api/v1/styles
+```
+
+### List Themes
+```
+GET /api/v1/themes
 ```
 
 ### Gallery ZIP Download
@@ -67,11 +73,30 @@ GET /api/v1/health
 | `pixel` | Retro pixel art creatures (space-invader style) |
 | `sunset` | Layered horizon bands with harmonious colors and sun glow |
 
+## Color Themes
+
+Apply a color theme to any style with the `theme` parameter:
+
+| Theme | Description |
+|-------|-------------|
+| `warm` | Reds, oranges, and yellows |
+| `cool` | Blues and cyans |
+| `ocean` | Teals and deep blues |
+| `forest` | Greens and earth tones |
+| `sunset` | Pinks, reds, and oranges |
+| `neon` | High-saturation on dark background |
+| `pastel` | Soft, light colors |
+| `monochrome` | Grayscale only |
+| `earth` | Browns, tans, and muted tones |
+
 ## Example Usage
 
 ```bash
 # Generate a PNG avatar
 curl -o avatar.png "https://your-server/api/v1/avatar/nanook?style=robot&size=256"
+
+# Generate with a theme
+curl -o avatar.png "https://your-server/api/v1/avatar/nanook?style=geometric&theme=neon"
 
 # Generate SVG
 curl -o avatar.svg "https://your-server/api/v1/avatar/nanook?format=svg"

@@ -5,6 +5,7 @@ mod avatar;
 mod rate_limit;
 mod routes;
 mod styles;
+mod theme;
 
 use rocket::fs::{FileServer, Options};
 use rocket_cors::{AllowedOrigins, CorsOptions};
@@ -43,6 +44,7 @@ fn rocket() -> _ {
                 routes::generate_avatar_png,
                 routes::generate_avatar_svg,
                 routes::list_styles,
+                routes::list_themes,
                 routes::batch_generate,
                 routes::gallery_zip,
             ],

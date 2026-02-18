@@ -6,7 +6,12 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const MAX_REQUESTS: u32 = 200;
+fn max_requests() -> u32 {
+    std::env::var("RATE_LIMIT_MAX")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(200)
+}
 
 pub struct RateLimiter {
     window: Duration,
@@ -36,19 +41,19 @@ impl RateLimiter {
 
         entry.1 += 1;
 
-        if entry.1 > MAX_REQUESTS {
+        if entry.1 > max_requests() {
             let remaining_secs = self.window.as_secs().saturating_sub(now.duration_since(entry.0).as_secs());
             RateResult {
                 allowed: false,
-                limit: MAX_REQUESTS,
+                limit: max_requests(),
                 remaining: 0,
                 retry_after: Some(remaining_secs),
             }
         } else {
             RateResult {
                 allowed: true,
-                limit: MAX_REQUESTS,
-                remaining: MAX_REQUESTS - entry.1,
+                limit: max_requests(),
+                remaining: max_requests() - entry.1,
                 retry_after: None,
             }
         }

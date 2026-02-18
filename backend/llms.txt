@@ -14,13 +14,17 @@ Generate with style: GET /api/v1/avatar/{seed}?style=robot&size=256
 
 ### Generate Avatar
 GET /api/v1/avatar/{seed}
-- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst|mosaic|pixel|sunset), size (16-1024), format (png|svg), background (hex)
+- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst|mosaic|pixel|sunset), size (16-1024), format (png|svg), background (hex), theme (warm|cool|ocean|forest|sunset|neon|pastel|monochrome|earth)
 - Returns: image/png or image/svg+xml
 - No auth required
 
 ### List Styles
 GET /api/v1/styles
 - Returns: JSON array of available styles with descriptions
+
+### List Themes
+GET /api/v1/themes
+- Returns: JSON array of available color themes with descriptions
 
 ### Batch Generate
 POST /api/v1/avatar/batch
@@ -51,6 +55,23 @@ GET /api/v1/health
 - mosaic: 6×6 grid of shapes with harmonious color palette
 - pixel: Retro pixel art creatures with horizontal symmetry (space-invader inspired)
 - sunset: Layered horizon bands with harmonious colors, wavy edges, and optional sun glow
+
+## Color Themes
+Apply a color theme to any style:
+GET /api/v1/avatar/{seed}?theme=warm
+
+- warm: Reds, oranges, and yellows
+- cool: Blues and cyans
+- ocean: Teals and deep blues
+- forest: Greens and earth tones
+- sunset: Pinks, reds, and oranges
+- neon: High-saturation on dark background
+- pastel: Soft, light colors
+- monochrome: Grayscale only
+- earth: Browns, tans, and muted tones
+
+Themes are optional. When omitted, the default color palette is used.
+Same seed + same theme = same output (deterministic).
 
 ## Key Properties
 - Deterministic: same seed → same avatar, always

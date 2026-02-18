@@ -1022,3 +1022,214 @@ fn test_gallery_zip_multi_seed_all_styles() {
     // 2 seeds × 10 styles = 20 entries
     assert_eq!(zip.len(), 20);
 }
+
+// ── Themes ──
+
+#[test]
+fn test_list_themes() {
+    let client = client();
+    let response = client.get("/api/v1/themes").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let themes = body.as_array().unwrap();
+    assert_eq!(themes.len(), 9);
+    let names: Vec<&str> = themes.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"warm"));
+    assert!(names.contains(&"cool"));
+    assert!(names.contains(&"ocean"));
+    assert!(names.contains(&"forest"));
+    assert!(names.contains(&"sunset"));
+    assert!(names.contains(&"neon"));
+    assert!(names.contains(&"pastel"));
+    assert!(names.contains(&"monochrome"));
+    assert!(names.contains(&"earth"));
+}
+
+#[test]
+fn test_themed_png_differs_from_unthemed() {
+    let client = client();
+    let unthemed = client.get("/api/v1/avatar/nanook?style=geometric").dispatch();
+    let themed = client.get("/api/v1/avatar/nanook?style=geometric&theme=warm").dispatch();
+    assert_eq!(unthemed.status(), Status::Ok);
+    assert_eq!(themed.status(), Status::Ok);
+    let bytes1 = unthemed.into_bytes().unwrap();
+    let bytes2 = themed.into_bytes().unwrap();
+    assert_ne!(bytes1, bytes2, "Themed avatar should differ from unthemed");
+}
+
+#[test]
+fn test_themed_svg_differs_from_unthemed() {
+    let client = client();
+    let unthemed = client.get("/api/v1/avatar/nanook?style=geometric&format=svg").dispatch();
+    let themed = client.get("/api/v1/avatar/nanook?style=geometric&format=svg&theme=cool").dispatch();
+    assert_eq!(unthemed.status(), Status::Ok);
+    assert_eq!(themed.status(), Status::Ok);
+    let svg1 = unthemed.into_string().unwrap();
+    let svg2 = themed.into_string().unwrap();
+    assert_ne!(svg1, svg2, "Themed SVG should differ from unthemed");
+    assert!(svg2.starts_with("<svg"), "Themed SVG should be valid");
+}
+
+#[test]
+fn test_themed_png_deterministic() {
+    let client = client();
+    let r1 = client.get("/api/v1/avatar/test?theme=ocean").dispatch();
+    let r2 = client.get("/api/v1/avatar/test?theme=ocean").dispatch();
+    assert_eq!(r1.status(), Status::Ok);
+    assert_eq!(r2.status(), Status::Ok);
+    let b1 = r1.into_bytes().unwrap();
+    let b2 = r2.into_bytes().unwrap();
+    assert_eq!(b1, b2, "Same seed + same theme should produce identical output");
+}
+
+#[test]
+fn test_different_themes_produce_different_results() {
+    let client = client();
+    let warm = client.get("/api/v1/avatar/test?theme=warm").dispatch();
+    let cool = client.get("/api/v1/avatar/test?theme=cool").dispatch();
+    assert_eq!(warm.status(), Status::Ok);
+    assert_eq!(cool.status(), Status::Ok);
+    let b1 = warm.into_bytes().unwrap();
+    let b2 = cool.into_bytes().unwrap();
+    assert_ne!(b1, b2, "Different themes should produce different output");
+}
+
+#[test]
+fn test_all_themes_valid_png() {
+    let client = client();
+    for theme in &["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"] {
+        let url = format!("/api/v1/avatar/test?theme={theme}");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Theme {theme} should produce valid response");
+        let bytes = response.into_bytes().unwrap();
+        assert!(!bytes.is_empty(), "Theme {theme} should produce non-empty PNG");
+        // Verify PNG magic bytes
+        assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47], "Theme {theme} should produce valid PNG");
+    }
+}
+
+#[test]
+fn test_all_themes_valid_svg() {
+    let client = client();
+    for theme in &["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"] {
+        let url = format!("/api/v1/avatar/test?format=svg&theme={theme}");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Theme {theme} SVG should work");
+        let svg = response.into_string().unwrap();
+        assert!(svg.starts_with("<svg"), "Theme {theme} should produce valid SVG");
+    }
+}
+
+#[test]
+fn test_all_themes_all_styles_png() {
+    let client = client();
+    for theme in &["warm", "cool", "neon", "monochrome"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"] {
+            let url = format!("/api/v1/avatar/test?style={style}&theme={theme}");
+            let response = client.get(&url).dispatch();
+            assert_eq!(response.status(), Status::Ok, "Style {style} + theme {theme} should work");
+        }
+    }
+}
+
+#[test]
+fn test_invalid_theme_returns_error() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/test?theme=rainbow").dispatch();
+    assert_eq!(response.status(), Status::BadRequest);
+    let body: serde_json::Value = response.into_json().unwrap();
+    assert!(body["error"].as_str().unwrap().contains("Unknown theme"));
+}
+
+#[test]
+fn test_theme_with_background_override() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/test?theme=warm&background=FF0000").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    assert!(!bytes.is_empty());
+}
+
+#[test]
+fn test_themed_batch() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["a","b"],"theme":"ocean"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 2);
+    assert!(avatars[0]["data"].as_str().unwrap().len() > 0);
+}
+
+#[test]
+fn test_themed_batch_svg() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["a"],"format":"svg","theme":"monochrome"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let data = body["avatars"][0]["data"].as_str().unwrap();
+    // Decode base64 and check it's SVG
+    let decoded = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data).unwrap();
+    let svg = String::from_utf8(decoded).unwrap();
+    assert!(svg.starts_with("<svg"));
+}
+
+#[test]
+fn test_themed_gallery_zip() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["test"],"theme":"forest"}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let zip = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(zip.len(), 1);
+}
+
+#[test]
+fn test_neon_theme_dark_bg_png() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/test?style=geometric&theme=neon").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    // Just verify it produces a valid PNG
+    assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn test_monochrome_theme_desaturated_svg() {
+    let client = client();
+    let response = client.get("/api/v1/avatar/colorful?style=blockies&format=svg&theme=monochrome").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let svg = response.into_string().unwrap();
+    assert!(svg.starts_with("<svg"));
+    // Check that colors are desaturated (R≈G≈B in hex values)
+    // Find hex colors and verify they're near-gray
+    let mut found_color = false;
+    for part in svg.split('#') {
+        if part.len() >= 6 && part[..6].chars().all(|c| c.is_ascii_hexdigit()) {
+            let hex = &part[..6];
+            let r = u8::from_str_radix(&hex[0..2], 16).unwrap();
+            let g = u8::from_str_radix(&hex[2..4], 16).unwrap();
+            let b = u8::from_str_radix(&hex[4..6], 16).unwrap();
+            // Monochrome: channels should be close to each other
+            let max_diff = (r as i16 - g as i16).unsigned_abs()
+                .max((g as i16 - b as i16).unsigned_abs())
+                .max((r as i16 - b as i16).unsigned_abs());
+            assert!(max_diff < 20, "Monochrome color #{hex} should be near-gray (max channel diff: {max_diff})");
+            found_color = true;
+        }
+    }
+    assert!(found_color, "Should have found at least one color in SVG");
+}

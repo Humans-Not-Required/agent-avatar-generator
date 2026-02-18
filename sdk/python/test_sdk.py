@@ -779,6 +779,129 @@ class TestGalleryZip(unittest.TestCase):
         self.assertEqual(data[:2], b"PK")
 
 
+class TestThemes(unittest.TestCase):
+    """Tests for color theme support."""
+
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_list_themes(self):
+        """GET /api/v1/themes returns 9 themes."""
+        themes = self.client.themes()
+        self.assertEqual(len(themes), 9)
+        names = [t["name"] for t in themes]
+        self.assertIn("warm", names)
+        self.assertIn("cool", names)
+        self.assertIn("neon", names)
+        self.assertIn("monochrome", names)
+
+    def test_themes_have_descriptions(self):
+        """Each theme has a name and description."""
+        themes = self.client.themes()
+        for t in themes:
+            self.assertIn("name", t)
+            self.assertIn("description", t)
+            self.assertIsInstance(t["name"], str)
+            self.assertIsInstance(t["description"], str)
+            self.assertGreater(len(t["description"]), 0)
+
+    def test_themed_png_differs(self):
+        """Themed PNG should differ from unthemed."""
+        normal = self.client.generate_png("test")
+        themed = self.client.generate_png("test", theme="warm")
+        self.assertNotEqual(normal, themed)
+
+    def test_themed_svg_differs(self):
+        """Themed SVG should differ from unthemed."""
+        normal = self.client.generate_svg("test")
+        themed = self.client.generate_svg("test", theme="cool")
+        self.assertNotEqual(normal, themed)
+        self.assertTrue(themed.startswith("<svg"))
+
+    def test_themed_deterministic(self):
+        """Same seed + same theme = same output."""
+        a = self.client.generate_png("test", theme="ocean")
+        b = self.client.generate_png("test", theme="ocean")
+        self.assertEqual(a, b)
+
+    def test_different_themes_differ(self):
+        """Different themes produce different output."""
+        warm = self.client.generate_png("test", theme="warm")
+        cool = self.client.generate_png("test", theme="cool")
+        self.assertNotEqual(warm, cool)
+
+    def test_all_themes_png(self):
+        """All 9 themes produce valid PNGs."""
+        for name in ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]:
+            data = self.client.generate_png("test", theme=name)
+            self.assertIsInstance(data, bytes, f"Theme {name} should produce bytes")
+            self.assertEqual(data[:4], b"\x89PNG", f"Theme {name} should produce valid PNG")
+
+    def test_all_themes_svg(self):
+        """All 9 themes produce valid SVGs."""
+        for name in ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]:
+            data = self.client.generate_svg("test", theme=name)
+            self.assertTrue(data.startswith("<svg"), f"Theme {name} should produce valid SVG")
+
+    def test_themes_with_all_styles(self):
+        """Themes work with every style."""
+        for theme in ["warm", "neon", "monochrome"]:
+            for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"]:
+                data = self.client.generate_png("test", style=style, theme=theme)
+                self.assertIsInstance(data, bytes, f"{style}+{theme} should work")
+
+    def test_invalid_theme(self):
+        """Invalid theme name returns error."""
+        with self.assertRaises(ValidationError):
+            self.client.generate_png("test", theme="rainbow")
+
+    def test_themed_batch(self):
+        """Batch with theme works."""
+        results = self.client.batch(["a", "b"], theme="ocean")
+        self.assertEqual(len(results), 2)
+        for r in results:
+            self.assertGreater(len(r["data"]), 0)
+
+    def test_themed_batch_svg(self):
+        """Batch SVG with theme works."""
+        results = self.client.batch(["a"], fmt="svg", theme="monochrome")
+        self.assertEqual(len(results), 1)
+        import base64
+        decoded = base64.b64decode(results[0]["data"]).decode("utf-8")
+        self.assertTrue(decoded.startswith("<svg"))
+
+    def test_themed_gallery_zip(self):
+        """Gallery ZIP with theme works."""
+        data = self.client.gallery_zip(["test"], theme="forest")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_themed_gallery_zip_all_styles(self):
+        """Gallery ZIP all styles + theme works."""
+        data = self.client.gallery_zip(["test"], style="all", theme="pastel")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:2], b"PK")
+
+    def test_theme_with_background(self):
+        """Theme works with background override."""
+        data = self.client.generate_png("test", theme="warm", background="FF0000")
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data[:4], b"\x89PNG")
+
+    def test_themed_save(self):
+        """Save with theme works."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            path = f.name
+        try:
+            self.client.save("test", path, theme="earth")
+            self.assertTrue(os.path.exists(path))
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(4), b"\x89PNG")
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()

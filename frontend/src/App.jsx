@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 
 const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset'];
+const THEMES = [
+  { name: 'none', label: '—', desc: 'Default colors' },
+  { name: 'warm', label: '🔥', desc: 'Warm' },
+  { name: 'cool', label: '❄️', desc: 'Cool' },
+  { name: 'ocean', label: '🌊', desc: 'Ocean' },
+  { name: 'forest', label: '🌲', desc: 'Forest' },
+  { name: 'sunset', label: '🌅', desc: 'Sunset' },
+  { name: 'neon', label: '⚡', desc: 'Neon' },
+  { name: 'pastel', label: '🎀', desc: 'Pastel' },
+  { name: 'monochrome', label: '⬛', desc: 'Mono' },
+  { name: 'earth', label: '🪨', desc: 'Earth' },
+];
 const API_BASE = window.location.origin;
 const DEFAULT_GALLERY_SEEDS = 'nanook\nforge\ndrift\nlux\ngerundium\nsmoltbot\nclawrecipes\nagent-42';
 
@@ -13,6 +25,7 @@ function App() {
   const [format, setFormat] = useState('png');
   const [copied, setCopied] = useState(false);
   const [galleryStyle, setGalleryStyle] = useState('all');
+  const [theme, setTheme] = useState('none');
   const [downloading, setDownloading] = useState(false);
 
   const gallerySeeds = galleryText
@@ -21,8 +34,9 @@ function App() {
     .filter(s => s.length > 0)
     .slice(0, 50);
 
-  const avatarUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=png`;
-  const downloadUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}`;
+  const themeParam = theme !== 'none' ? `&theme=${theme}` : '';
+  const avatarUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=png${themeParam}`;
+  const downloadUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}${themeParam}`;
   const shareUrl = `${API_BASE}/avatar/view/${encodeURIComponent(seed)}?style=${style}&size=${size}`;
 
   const downloadZip = async () => {
@@ -37,6 +51,7 @@ function App() {
           style: galleryStyle,
           size,
           format,
+          ...(theme !== 'none' && { theme }),
         }),
       });
       if (!res.ok) throw new Error('Download failed');
@@ -119,13 +134,33 @@ function App() {
                       }}
                     >
                       <img
-                        src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(seed || 'preview')}?style=${s}&size=48`}
+                        src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(seed || 'preview')}?style=${s}&size=48${themeParam}`}
                         alt={s}
                         width={48}
                         height={48}
                         style={{ borderRadius: 6 }}
                       />
                       <span style={{ fontSize: '0.75rem' }}>{s}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Theme</label>
+                <div style={themeGridStyle}>
+                  {THEMES.map(t => (
+                    <button
+                      key={t.name}
+                      onClick={() => setTheme(t.name)}
+                      title={t.desc}
+                      style={{
+                        ...themeButtonStyle,
+                        ...(theme === t.name ? themeButtonActiveStyle : {}),
+                      }}
+                    >
+                      <span style={{ fontSize: '1rem' }}>{t.label}</span>
+                      <span style={{ fontSize: '0.65rem' }}>{t.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -164,7 +199,7 @@ function App() {
               <div style={previewStyle}>
                 {seed && (
                   <img
-                    key={`${seed}-${style}-${size}`}
+                    key={`${seed}-${style}-${size}-${theme}`}
                     src={avatarUrl}
                     alt={`Avatar for ${seed}`}
                     style={{ borderRadius: 12, maxWidth: '100%' }}
@@ -280,7 +315,7 @@ function App() {
                           {STYLES.map(s => (
                             <div key={`${gseed}-${s}`} style={galleryMatrixCellStyle}>
                               <img
-                                src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(gseed)}?style=${s}&size=${Math.min(size, 128)}`}
+                                src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(gseed)}?style=${s}&size=${Math.min(size, 128)}${themeParam}`}
                                 alt={`${gseed} ${s}`}
                                 width={Math.min(size, 64)}
                                 height={Math.min(size, 64)}
@@ -297,7 +332,7 @@ function App() {
                       {gallerySeeds.map(gseed => (
                         <div key={gseed} style={galleryItemStyle}>
                           <img
-                            src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(gseed)}?style=${galleryStyle}&size=${Math.min(size, 256)}`}
+                            src={`${API_BASE}/api/v1/avatar/${encodeURIComponent(gseed)}?style=${galleryStyle}&size=${Math.min(size, 256)}${themeParam}`}
                             alt={`Avatar for ${gseed}`}
                             width={Math.min(size, 128)}
                             height={Math.min(size, 128)}
@@ -427,6 +462,32 @@ const styleButtonStyle = {
 };
 
 const styleButtonActiveStyle = {
+  borderColor: '#4a9eff',
+  color: '#4a9eff',
+};
+
+const themeGridStyle = {
+  display: 'flex',
+  gap: '0.35rem',
+  flexWrap: 'wrap',
+};
+
+const themeButtonStyle = {
+  background: '#0f0f1a',
+  border: '2px solid #333',
+  borderRadius: 8,
+  padding: '0.35rem 0.5rem',
+  cursor: 'pointer',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '0.1rem',
+  color: '#aaa',
+  transition: 'border-color 0.2s',
+  minWidth: 52,
+};
+
+const themeButtonActiveStyle = {
   borderColor: '#4a9eff',
   color: '#4a9eff',
 };
