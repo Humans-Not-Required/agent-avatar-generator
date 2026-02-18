@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Agent Avatar Generator",
-    "description": "Self-hosted deterministic avatar generation for AI agents",
-    "version": "0.1.0",
+    "description": "Self-hosted deterministic avatar generation for AI agents. Supports PNG, SVG, and animated GIF output.",
+    "version": "0.2.0",
     "license": { "name": "MIT" }
   },
   "servers": [{ "url": "/api/v1" }],
@@ -11,21 +11,24 @@
     "/avatar/{seed}": {
       "get": {
         "summary": "Generate avatar",
-        "description": "Generate a deterministic avatar from a seed string. Returns X-Generation-Time-Ms header with generation time in milliseconds.",
+        "description": "Generate a deterministic avatar from a seed string. Returns X-Generation-Time-Ms header with generation time in milliseconds. For GIF format, each style has a unique animation (e.g. robot eyes blink, rings pulsate, starburst rotates). X-Frame-Count header is included for GIF responses.",
         "parameters": [
           { "name": "seed", "in": "path", "required": true, "schema": { "type": "string" } },
           { "name": "style", "in": "query", "schema": { "type": "string", "enum": ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"], "default": "geometric" } },
           { "name": "size", "in": "query", "schema": { "type": "integer", "minimum": 16, "maximum": 1024, "default": 256 } },
-          { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["png", "svg"], "default": "png" } },
+          { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["png", "svg", "gif"], "default": "png" } },
           { "name": "background", "in": "query", "schema": { "type": "string", "description": "Hex color (e.g. ff0000)" } },
-          { "name": "theme", "in": "query", "schema": { "type": "string", "enum": ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"], "description": "Color theme applied via post-processing" } }
+          { "name": "theme", "in": "query", "schema": { "type": "string", "enum": ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"], "description": "Color theme applied via post-processing" } },
+          { "name": "frames", "in": "query", "schema": { "type": "integer", "minimum": 2, "maximum": 30, "default": 10, "description": "Number of animation frames (GIF only)" } },
+          { "name": "delay", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 8, "description": "Frame delay in centiseconds (GIF only, 8 = 80ms/frame)" } }
         ],
         "responses": {
           "200": {
             "description": "Avatar image",
-            "content": { "image/png": {}, "image/svg+xml": {} },
+            "content": { "image/png": {}, "image/svg+xml": {}, "image/gif": {} },
             "headers": {
               "X-Generation-Time-Ms": { "schema": { "type": "number" }, "description": "Avatar generation time in milliseconds" },
+              "X-Frame-Count": { "schema": { "type": "integer" }, "description": "Number of animation frames (GIF only)" },
               "Cache-Control": { "schema": { "type": "string" }, "description": "public, max-age=31536000, immutable" }
             }
           },
@@ -37,7 +40,7 @@
     "/avatar/batch": {
       "post": {
         "summary": "Batch generate avatars",
-        "description": "Generate multiple avatars in parallel. Response includes generation timing.",
+        "description": "Generate multiple avatars in parallel. Response includes generation timing. Supports GIF format with frames/delay parameters.",
         "requestBody": {
           "required": true,
           "content": {
@@ -49,9 +52,11 @@
                   "seeds": { "type": "array", "items": { "type": "string" }, "maxItems": 50 },
                   "style": { "type": "string", "default": "geometric" },
                   "size": { "type": "integer", "default": 128 },
-                  "format": { "type": "string", "default": "png" },
+                  "format": { "type": "string", "enum": ["png", "svg", "gif"], "default": "png" },
                   "background": { "type": "string" },
-                  "theme": { "type": "string", "description": "Color theme name" }
+                  "theme": { "type": "string", "description": "Color theme name" },
+                  "frames": { "type": "integer", "minimum": 2, "maximum": 30, "default": 10, "description": "Animation frames (GIF only)" },
+                  "delay": { "type": "integer", "minimum": 1, "maximum": 100, "default": 8, "description": "Frame delay in centiseconds (GIF only)" }
                 }
               }
             }
@@ -81,7 +86,7 @@
     "/avatar/gallery/zip": {
       "post": {
         "summary": "Download gallery as ZIP",
-        "description": "Generate multiple avatars in parallel and download as a ZIP file. Use style='all' to include every style. Returns X-Generation-Time-Ms and X-Avatar-Count headers.",
+        "description": "Generate multiple avatars in parallel and download as a ZIP file. Use style='all' to include every style. Returns X-Generation-Time-Ms and X-Avatar-Count headers. Supports GIF format with frames/delay parameters.",
         "requestBody": {
           "required": true,
           "content": {
@@ -93,9 +98,11 @@
                   "seeds": { "type": "array", "items": { "type": "string" }, "maxItems": 50 },
                   "style": { "type": "string", "default": "geometric", "description": "Style name or 'all' for every style" },
                   "size": { "type": "integer", "default": 256, "minimum": 16, "maximum": 1024 },
-                  "format": { "type": "string", "enum": ["png", "svg"], "default": "png" },
+                  "format": { "type": "string", "enum": ["png", "svg", "gif"], "default": "png" },
                   "background": { "type": "string", "description": "Hex color (e.g. ff0000)" },
-                  "theme": { "type": "string", "description": "Color theme name" }
+                  "theme": { "type": "string", "description": "Color theme name" },
+                  "frames": { "type": "integer", "minimum": 2, "maximum": 30, "default": 10, "description": "Animation frames (GIF only)" },
+                  "delay": { "type": "integer", "minimum": 1, "maximum": 100, "default": 8, "description": "Frame delay in centiseconds (GIF only)" }
                 }
               }
             }
@@ -118,6 +125,7 @@
     "/styles": {
       "get": {
         "summary": "List available styles",
+        "description": "Returns all available avatar styles with descriptions and supported animations.",
         "responses": {
           "200": { "description": "Array of style objects" }
         }

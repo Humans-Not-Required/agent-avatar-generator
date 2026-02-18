@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+mod animation;
 mod avatar;
 mod rate_limit;
 mod routes;

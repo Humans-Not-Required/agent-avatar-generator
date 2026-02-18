@@ -1,3 +1,4 @@
+use crate::animation;
 use crate::avatar;
 use crate::rate_limit::{RateGuard, RateLimited};
 use crate::styles::{self, DEFAULT_SIZE, DEFAULT_STYLE, MAX_SIZE, MIN_SIZE};
@@ -149,8 +150,9 @@ type RatedApiResult<T> = Result<RateLimited<ApiResult<T>>, (Status, Json<ApiErro
 
 // ── Routes ──
 
-/// GET /api/v1/avatar/<seed> — generate avatar (PNG default)
-#[get("/avatar/<seed>?<style>&<size>&<format>&<background>&<theme>")]
+/// GET /api/v1/avatar/<seed> — generate avatar (PNG default, also SVG and GIF)
+#[get("/avatar/<seed>?<style>&<size>&<format>&<background>&<theme>&<frames>&<delay>")]
+#[allow(clippy::too_many_arguments)]
 pub fn generate_avatar(
     seed: &str,
     style: Option<String>,
@@ -158,6 +160,8 @@ pub fn generate_avatar(
     format: Option<String>,
     background: Option<String>,
     theme: Option<String>,
+    frames: Option<u16>,
+    delay: Option<u16>,
     rate: RateGuard,
 ) -> RatedApiResult<ImageResponseOrSvg> {
     let (style, size) = validate_params(&style, &size)?;
@@ -206,11 +210,30 @@ pub fn generate_avatar(
                 )),
             }
         }
+        "gif" => {
+            let gif_size = size.min(animation::MAX_GIF_SIZE);
+            let frame_count = frames.unwrap_or(animation::DEFAULT_FRAMES);
+            let frame_delay = delay.unwrap_or(animation::DEFAULT_DELAY);
+            let result = animation::generate_gif(seed, &style, gif_size, bg, frame_count, frame_delay);
+            let gen_ms = start.elapsed().as_secs_f64() * 1000.0;
+            match result {
+                Ok(bytes) => Ok(ImageResponseOrSvg::Gif(GifResponse {
+                    bytes,
+                    cache_control: CACHE_HEADER.to_string(),
+                    generation_ms: Some(gen_ms),
+                    frame_count: Some(frame_count.clamp(2, animation::MAX_FRAMES)),
+                })),
+                Err(e) => Err((
+                    Status::InternalServerError,
+                    Json(ApiError { error: e, detail: None }),
+                )),
+            }
+        }
         _ => Err((
             Status::BadRequest,
             Json(ApiError {
                 error: format!("Unknown format: {fmt}"),
-                detail: Some("Valid formats: png, svg".to_string()),
+                detail: Some("Valid formats: png, svg, gif".to_string()),
             }),
         )),
     };
@@ -391,6 +414,9 @@ pub fn batch_generate(
     let t = req.theme.as_ref().and_then(|n| Theme::parse(n));
     let start = Instant::now();
 
+    let gif_frames = req.frames.unwrap_or(animation::DEFAULT_FRAMES);
+    let gif_delay = req.delay.unwrap_or(animation::DEFAULT_DELAY);
+
     // Generate all avatars in parallel using rayon
     let results: Vec<BatchItem> = req.seeds
         .par_iter()
@@ -404,6 +430,11 @@ pub fn batch_generate(
                         avatar::generate_svg(seed, style, size, bg)
                             .map(|svg| base64::engine::general_purpose::STANDARD.encode(svg.as_bytes()))
                     }
+                }
+                "gif" => {
+                    let gif_size = size.min(animation::MAX_GIF_SIZE);
+                    animation::generate_gif(seed, style, gif_size, bg, gif_frames, gif_delay)
+                        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
                 }
                 _ => {
                     if let Some(ref t) = t {
@@ -453,13 +484,13 @@ pub fn gallery_zip(
     rate: RateGuard,
 ) -> RateLimited<ApiResult<ZipResponse>> {
     let format = req.format.as_deref().unwrap_or("png");
-    if format != "png" && format != "svg" {
+    if format != "png" && format != "svg" && format != "gif" {
         return RateLimited {
             inner: Err((
                 Status::BadRequest,
                 Json(ApiError {
                     error: format!("Unknown format: {format}"),
-                    detail: Some("Valid formats: png, svg".to_string()),
+                    detail: Some("Valid formats: png, svg, gif".to_string()),
                 }),
             )),
             limit: rate.limit,
@@ -553,6 +584,12 @@ pub fn gallery_zip(
                     } else {
                         avatar::generate_svg(seed, style, size, bg).map(|s| s.into_bytes())
                     }
+                }
+                "gif" => {
+                    let gif_size = size.min(animation::MAX_GIF_SIZE);
+                    let gif_frames = req.frames.unwrap_or(animation::DEFAULT_FRAMES);
+                    let gif_delay = req.delay.unwrap_or(animation::DEFAULT_DELAY);
+                    animation::generate_gif(seed, style, gif_size, bg, gif_frames, gif_delay)
                 }
                 _ => {
                     if let Some(ref t) = t {
@@ -737,6 +774,8 @@ pub struct BatchRequest {
     pub format: Option<String>,
     pub background: Option<String>,
     pub theme: Option<String>,
+    pub frames: Option<u16>,
+    pub delay: Option<u16>,
 }
 
 #[derive(Debug, Serialize)]
@@ -763,6 +802,8 @@ pub struct GalleryZipRequest {
     pub format: Option<String>,
     pub background: Option<String>,
     pub theme: Option<String>,
+    pub frames: Option<u16>,
+    pub delay: Option<u16>,
 }
 
 /// Build a Rocket instance for testing.
@@ -813,10 +854,36 @@ pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
         )
 }
 
-// Union type for PNG/SVG response
+pub struct GifResponse {
+    pub bytes: Vec<u8>,
+    pub cache_control: String,
+    pub generation_ms: Option<f64>,
+    pub frame_count: Option<u16>,
+}
+
+impl<'r> Responder<'r, 'static> for GifResponse {
+    fn respond_to(self, _req: &'r Request<'_>) -> response::Result<'static> {
+        let mut builder = Response::build();
+        builder
+            .header(ContentType::GIF)
+            .header(Header::new("Cache-Control", self.cache_control));
+        if let Some(ms) = self.generation_ms {
+            builder.header(Header::new("X-Generation-Time-Ms", format!("{ms:.2}")));
+        }
+        if let Some(n) = self.frame_count {
+            builder.header(Header::new("X-Frame-Count", n.to_string()));
+        }
+        builder
+            .sized_body(self.bytes.len(), std::io::Cursor::new(self.bytes))
+            .ok()
+    }
+}
+
+// Union type for PNG/SVG/GIF response
 pub enum ImageResponseOrSvg {
     Png(ImageResponse),
     Svg(SvgResponse),
+    Gif(GifResponse),
 }
 
 impl<'r> Responder<'r, 'static> for ImageResponseOrSvg {
@@ -824,6 +891,7 @@ impl<'r> Responder<'r, 'static> for ImageResponseOrSvg {
         match self {
             Self::Png(r) => r.respond_to(req),
             Self::Svg(r) => r.respond_to(req),
+            Self::Gif(r) => r.respond_to(req),
         }
     }
 }

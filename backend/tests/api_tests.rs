@@ -181,9 +181,93 @@ fn test_different_seeds_differ() {
 fn test_invalid_format() {
     let client = client();
     let response = client
-        .get("/api/v1/avatar/test?format=gif")
+        .get("/api/v1/avatar/test?format=bmp")
         .dispatch();
     assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[test]
+fn test_gif_format() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/test?format=gif&frames=4&delay=10")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_bytes().unwrap();
+    assert!(body.starts_with(b"GIF89a"), "Response should be a valid GIF");
+}
+
+#[test]
+fn test_gif_content_type() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/test?format=gif&frames=4")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::GIF));
+}
+
+#[test]
+fn test_gif_frame_count_header() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/test?format=gif&frames=6")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let fc = response.headers().get_one("X-Frame-Count");
+    assert_eq!(fc, Some("6"));
+}
+
+#[test]
+fn test_gif_all_styles() {
+    let client = client();
+    let styles = ["geometric", "rings", "robot", "blockies", "gradient",
+                  "initials", "starburst", "mosaic", "pixel", "sunset"];
+    for style in &styles {
+        let response = client
+            .get(format!("/api/v1/avatar/test?format=gif&style={style}&frames=3"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok, "Style {style} should work as GIF");
+        let body = response.into_bytes().unwrap();
+        assert!(body.starts_with(b"GIF89a"), "Style {style} should produce valid GIF");
+    }
+}
+
+#[test]
+fn test_gif_deterministic() {
+    let client = client();
+    let r1 = client.get("/api/v1/avatar/test?format=gif&frames=4&delay=10").dispatch();
+    let r2 = client.get("/api/v1/avatar/test?format=gif&frames=4&delay=10").dispatch();
+    assert_eq!(r1.into_bytes(), r2.into_bytes(), "Same params should produce same GIF");
+}
+
+#[test]
+fn test_gif_different_seeds() {
+    let client = client();
+    let r1 = client.get("/api/v1/avatar/alice?format=gif&frames=4").dispatch();
+    let r2 = client.get("/api/v1/avatar/bob?format=gif&frames=4").dispatch();
+    assert_ne!(r1.into_bytes(), r2.into_bytes(), "Different seeds should produce different GIFs");
+}
+
+#[test]
+fn test_gif_with_background() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/test?format=gif&frames=3&background=FF0000")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_bytes().unwrap();
+    assert!(body.starts_with(b"GIF89a"));
+}
+
+#[test]
+fn test_gif_timing_header() {
+    let client = client();
+    let response = client
+        .get("/api/v1/avatar/test?format=gif&frames=3")
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert!(response.headers().get_one("X-Generation-Time-Ms").is_some());
 }
 
 // ── Batch ──
@@ -971,9 +1055,50 @@ fn test_gallery_zip_invalid_format_error() {
     let response = client
         .post("/api/v1/avatar/gallery/zip")
         .header(ContentType::JSON)
-        .body(r#"{"seeds":["test"],"format":"gif"}"#)
+        .body(r#"{"seeds":["test"],"format":"bmp"}"#)
         .dispatch();
     assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[test]
+fn test_gallery_zip_gif_format() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["alice","bob"],"format":"gif","frames":3}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let bytes = response.into_bytes().unwrap();
+    let reader = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(zip.len(), 2);
+    // Each entry should be a valid GIF
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i).unwrap();
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut buf).unwrap();
+        assert!(buf.starts_with(b"GIF89a"), "ZIP entry should be a valid GIF");
+    }
+}
+
+#[test]
+fn test_batch_gif_format() {
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds":["alice","bob"],"format":"gif","frames":3}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let json: serde_json::Value = response.into_json().unwrap();
+    let avatars = json["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 2);
+    assert_eq!(avatars[0]["format"], "gif");
+    // Base64-decode and verify GIF header
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(avatars[0]["data"].as_str().unwrap()).unwrap();
+    assert!(data.starts_with(b"GIF89a"), "Batch GIF should have valid header");
 }
 
 #[test]
