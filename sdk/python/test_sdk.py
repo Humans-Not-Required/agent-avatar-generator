@@ -597,6 +597,86 @@ class TestConstructor(unittest.TestCase):
         self.assertIsNotNone(client.base_url)
 
 
+class TestRobotHeadShapes(unittest.TestCase):
+    """Tests for robot head shapes and accessories."""
+
+    def test_robot_dome_head_png(self):
+        """Dome-headed robot generates valid PNG."""
+        data = client.generate("dome-robot-1", style="robot", size=128)
+        self.assertTrue(len(data) > 100)
+        self.assertTrue(data[:8] == b'\x89PNG\r\n\x1a\n')
+
+    def test_robot_dome_head_svg(self):
+        """Dome-headed robot SVG contains path for arc."""
+        svg = client.generate_svg("dome-robot-1", style="robot", size=128)
+        self.assertIn("<svg", svg)
+        self.assertIn("</svg>", svg)
+
+    def test_robot_hex_head_png(self):
+        """Hexagonal-headed robot generates valid PNG."""
+        data = client.generate("hex-robot-1", style="robot", size=128)
+        self.assertTrue(len(data) > 100)
+
+    def test_robot_hex_head_svg(self):
+        """Hexagonal-headed robot SVG is valid."""
+        svg = client.generate_svg("hex-robot-1", style="robot", size=128)
+        self.assertIn("<svg", svg)
+
+    def test_robot_trapezoid_head_png(self):
+        """Trapezoid-headed robot generates valid PNG."""
+        data = client.generate("trap-robot-1", style="robot", size=128)
+        self.assertTrue(len(data) > 100)
+
+    def test_robot_different_heads_differ(self):
+        """Different robot seeds produce different PNGs (head variety)."""
+        imgs = set()
+        for i in range(20):
+            data = client.generate(f"robot-head-variety-{i}", style="robot", size=128)
+            imgs.add(data)
+        self.assertGreater(len(imgs), 15, "20 robot seeds should produce mostly unique images")
+
+    def test_robot_accessories_dont_break_small_size(self):
+        """Robot with accessories works at small sizes (16px)."""
+        data = client.generate("small-robot-accessories", style="robot", size=16)
+        self.assertTrue(len(data) > 50)
+
+    def test_robot_accessories_large_size(self):
+        """Robot with accessories works at large sizes (512px)."""
+        data = client.generate("large-robot-accessories", style="robot", size=512)
+        self.assertTrue(len(data) > 1000)
+
+    def test_robot_batch_with_head_variety(self):
+        """Batch robot generation works with new head shapes."""
+        seeds = [f"batch-robot-head-{i}" for i in range(10)]
+        result = client.batch(seeds, style="robot", size=64)
+        self.assertEqual(len(result), 10)
+        for item in result:
+            self.assertTrue(len(item) > 10)
+
+    def test_robot_bg_override_with_head_shapes(self):
+        """Background override works with new head shapes."""
+        normal = client.generate("robot-bg-test", style="robot", size=128)
+        override = client.generate("robot-bg-test", style="robot", size=128, background="ff0000")
+        self.assertNotEqual(normal, override)
+
+    def test_robot_svg_bg_override_with_head_shapes(self):
+        """SVG background override works with new head shapes."""
+        svg = client.generate_svg("robot-svg-bg-test", style="robot", size=128, background="00ff00")
+        self.assertIn("#00ff00", svg)
+
+    def test_robot_determinism_with_accessories(self):
+        """Robot with all accessories is deterministic."""
+        img1 = client.generate("determinism-robot-accessories", style="robot", size=256)
+        img2 = client.generate("determinism-robot-accessories", style="robot", size=256)
+        self.assertEqual(img1, img2)
+
+    def test_robot_svg_determinism_with_accessories(self):
+        """Robot SVG with all accessories is deterministic."""
+        svg1 = client.generate_svg("svg-robot-acc", style="robot", size=256)
+        svg2 = client.generate_svg("svg-robot-acc", style="robot", size=256)
+        self.assertEqual(svg1, svg2)
+
+
 if __name__ == "__main__":
     # Count tests
     loader = unittest.TestLoader()

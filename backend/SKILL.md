@@ -48,7 +48,7 @@ GET /api/v1/health
 |-------|-------------|
 | `geometric` | 5×5 symmetric grid identicon (default) |
 | `rings` | Concentric colored rings |
-| `robot` | Procedural robot faces |
+| `robot` | Procedural robot faces (4 head shapes, collars, shoulder pads, emblems) |
 | `blockies` | 8×8 Ethereum-style block grid |
 | `gradient` | Two-color gradient with shape overlay |
 | `initials` | Letter-based avatar with 1-2 initials |

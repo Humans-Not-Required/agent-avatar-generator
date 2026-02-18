@@ -265,12 +265,64 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
 
     let s = size as f64;
 
-    // Head (rounded rectangle area)
+    // Head shape selection
+    let head_shape = hash[17] % 4;
     let head_left = (s * 0.2) as u32;
     let head_right = (s * 0.8) as u32;
     let head_top = (s * 0.2) as u32;
     let head_bottom = (s * 0.7) as u32;
-    fill_rect(&mut img, head_left, head_top, head_right, head_bottom, body_color);
+
+    match head_shape {
+        1 => {
+            // Dome: semicircle top + rectangle bottom
+            let dome_cy = s * 0.38;
+            let dome_rx = s * 0.3;
+            let dome_ry = s * 0.18;
+            // Draw elliptical dome (upper half)
+            for y in head_top..(dome_cy as u32) {
+                let dy = (y as f64 - dome_cy) / dome_ry;
+                if dy.abs() <= 1.0 {
+                    let half_w = dome_rx * (1.0 - dy * dy).sqrt();
+                    let cx = s * 0.5;
+                    let x_start = (cx - half_w).max(0.0) as u32;
+                    let x_end = (cx + half_w).min(s - 1.0) as u32;
+                    for x in x_start..=x_end {
+                        img.put_pixel(x, y, Rgba([body_color.0, body_color.1, body_color.2, 255]));
+                    }
+                }
+            }
+            // Rectangle lower portion
+            fill_rect(&mut img, head_left, dome_cy as u32, head_right, head_bottom, body_color);
+        }
+        2 => {
+            // Hexagonal head
+            let cx = s * 0.5;
+            let cy = s * 0.45;
+            let rx = s * 0.3;
+            let ry = s * 0.25;
+            let vertices: Vec<(f64, f64)> = (0..6)
+                .map(|i| {
+                    let angle = std::f64::consts::PI / 3.0 * i as f64 - std::f64::consts::PI / 6.0;
+                    (cx + rx * angle.cos(), cy + ry * angle.sin())
+                })
+                .collect();
+            fill_polygon(&mut img, &vertices, body_color);
+        }
+        3 => {
+            // Trapezoid: wider at top, narrower at bottom
+            let vertices = vec![
+                (s * 0.15, s * 0.2),  // top-left (wide)
+                (s * 0.85, s * 0.2),  // top-right (wide)
+                (s * 0.75, s * 0.7),  // bottom-right (narrow)
+                (s * 0.25, s * 0.7),  // bottom-left (narrow)
+            ];
+            fill_polygon(&mut img, &vertices, body_color);
+        }
+        _ => {
+            // Classic square/rectangle head
+            fill_rect(&mut img, head_left, head_top, head_right, head_bottom, body_color);
+        }
+    }
 
     // Ears (drawn after head so they layer properly)
     let ear_style = hash[12] % 4;
@@ -453,6 +505,95 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
         let chin_w = if chin_style == 1 { (s * 0.1) as u32 } else { (s * 0.18) as u32 };
         let chin_h = (s * 0.03) as u32;
         fill_rect(&mut img, size / 2 - chin_w, chin_y, size / 2 + chin_w, chin_y + chin_h, accent_color);
+    }
+
+    // Neck/collar
+    let neck_style = hash[18] % 4;
+    let neck_y = (s * 0.68) as u32;
+    match neck_style {
+        1 => {
+            // Simple collar band
+            let collar_w = (s * 0.22) as u32;
+            let collar_h = (s * 0.04) as u32;
+            fill_rect(&mut img, size / 2 - collar_w, neck_y, size / 2 + collar_w, neck_y + collar_h, accent_color);
+        }
+        2 => {
+            // Double-line collar
+            let collar_w = (s * 0.2) as u32;
+            fill_rect(&mut img, size / 2 - collar_w, neck_y, size / 2 + collar_w, neck_y + 2, accent_color);
+            fill_rect(&mut img, size / 2 - collar_w, neck_y + 4, size / 2 + collar_w, neck_y + 6, accent_color);
+        }
+        3 => {
+            // Collar with center gem
+            let collar_w = (s * 0.2) as u32;
+            let collar_h = (s * 0.03) as u32;
+            fill_rect(&mut img, size / 2 - collar_w, neck_y, size / 2 + collar_w, neck_y + collar_h, accent_color);
+            let gem_r = (s * 0.02) as u32;
+            fill_circle(&mut img, size / 2, neck_y + collar_h / 2, gem_r, eye_color);
+        }
+        _ => {} // No collar
+    }
+
+    // Shoulder pads (below head)
+    let shoulder_style = hash[19] % 3;
+    let shoulder_y = (s * 0.72) as u32;
+    match shoulder_style {
+        1 => {
+            // Rectangular shoulder pads
+            let pad_w = (s * 0.12) as u32;
+            let pad_h = (s * 0.06) as u32;
+            fill_rect(&mut img, (s * 0.12) as u32, shoulder_y, (s * 0.12) as u32 + pad_w, shoulder_y + pad_h, body_color);
+            fill_rect(&mut img, (s * 0.88) as u32 - pad_w, shoulder_y, (s * 0.88) as u32, shoulder_y + pad_h, body_color);
+        }
+        2 => {
+            // Rounded shoulder pads
+            let pad_r = (s * 0.06) as u32;
+            fill_circle(&mut img, (s * 0.18) as u32, shoulder_y + pad_r / 2, pad_r, body_color);
+            fill_circle(&mut img, (s * 0.82) as u32, shoulder_y + pad_r / 2, pad_r, body_color);
+        }
+        _ => {} // No shoulder pads
+    }
+
+    // Chest emblem (on lower portion of head)
+    let emblem_style = hash[20] % 4;
+    let emblem_y = (s * 0.78) as u32;
+    let emblem_cx = size / 2;
+    match emblem_style {
+        1 => {
+            // Circle emblem
+            let er = (s * 0.04) as u32;
+            fill_circle(&mut img, emblem_cx, emblem_y, er, eye_color);
+        }
+        2 => {
+            // Diamond emblem
+            let ed = (s * 0.04) as u32;
+            let vertices = vec![
+                (emblem_cx as f64, (emblem_y - ed) as f64),
+                ((emblem_cx + ed) as f64, emblem_y as f64),
+                (emblem_cx as f64, (emblem_y + ed) as f64),
+                ((emblem_cx - ed) as f64, emblem_y as f64),
+            ];
+            fill_polygon(&mut img, &vertices, eye_color);
+        }
+        3 => {
+            // Star emblem (approximated as overlapping triangles)
+            let sr = (s * 0.04) as u32;
+            // Upward triangle
+            let tri_up = vec![
+                (emblem_cx as f64, (emblem_y - sr) as f64),
+                ((emblem_cx + sr) as f64, (emblem_y + sr / 2) as f64),
+                ((emblem_cx - sr) as f64, (emblem_y + sr / 2) as f64),
+            ];
+            fill_polygon(&mut img, &tri_up, eye_color);
+            // Downward triangle
+            let tri_down = vec![
+                (emblem_cx as f64, (emblem_y + sr) as f64),
+                ((emblem_cx + sr) as f64, (emblem_y - sr / 2) as f64),
+                ((emblem_cx - sr) as f64, (emblem_y - sr / 2) as f64),
+            ];
+            fill_polygon(&mut img, &tri_down, eye_color);
+        }
+        _ => {} // No emblem
     }
 
     img
@@ -1074,6 +1215,39 @@ fn fill_circle(img: &mut RgbaImage, cx: u32, cy: u32, radius: u32, color: (u8, u
     }
 }
 
+/// Fill a convex polygon defined by vertices using scanline rasterization.
+fn fill_polygon(img: &mut RgbaImage, vertices: &[(f64, f64)], color: (u8, u8, u8)) {
+    if vertices.is_empty() {
+        return;
+    }
+    let min_y = vertices.iter().map(|v| v.1).fold(f64::INFINITY, f64::min).max(0.0) as u32;
+    let max_y = vertices.iter().map(|v| v.1).fold(f64::NEG_INFINITY, f64::max).min(img.height() as f64 - 1.0) as u32;
+
+    for y in min_y..=max_y {
+        let yf = y as f64 + 0.5;
+        let mut intersections = Vec::new();
+        let n = vertices.len();
+        for i in 0..n {
+            let (x0, y0) = vertices[i];
+            let (x1, y1) = vertices[(i + 1) % n];
+            if (y0 <= yf && y1 > yf) || (y1 <= yf && y0 > yf) {
+                let t = (yf - y0) / (y1 - y0);
+                intersections.push(x0 + t * (x1 - x0));
+            }
+        }
+        intersections.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        for pair in intersections.chunks(2) {
+            if pair.len() == 2 {
+                let x_start = (pair[0].max(0.0)) as u32;
+                let x_end = (pair[1].min(img.width() as f64 - 1.0)) as u32;
+                for x in x_start..=x_end {
+                    img.put_pixel(x, y, Rgba([color.0, color.1, color.2, 255]));
+                }
+            }
+        }
+    }
+}
+
 fn lerp_u8(a: u8, b: u8, t: f64) -> u8 {
     ((a as f64) * (1.0 - t) + (b as f64) * t) as u8
 }
@@ -1157,16 +1331,73 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
 
     let mut parts = String::new();
 
-    // Head
+    // Head shape
+    let head_shape = hash[17] % 4;
     let hl = (s * 0.2) as u32;
     let ht = (s * 0.2) as u32;
     let hw = (s * 0.6) as u32;
     let hh = (s * 0.5) as u32;
     let hr = hl + hw; // head right edge
-    parts.push_str(&format!(
-        r#"<rect x="{hl}" y="{ht}" width="{hw}" height="{hh}" rx="4" fill="{}"/>"#,
-        hex_color(body_color)
-    ));
+
+    match head_shape {
+        1 => {
+            // Dome: elliptical top + rectangle bottom
+            let dome_cy = s * 0.38;
+            let dome_rx = s * 0.3;
+            let dome_ry = s * 0.18;
+            let cx = s * 0.5;
+            // Semicircle dome (upper half)
+            parts.push_str(&format!(
+                r#"<path d="M {},{} A {},{} 0 0 1 {},{} L {},{} Z" fill="{}"/>"#,
+                (cx - dome_rx) as u32, dome_cy as u32,
+                dome_rx as u32, dome_ry as u32,
+                (cx + dome_rx) as u32, dome_cy as u32,
+                (cx + dome_rx) as u32, dome_cy as u32,
+                hex_color(body_color)
+            ));
+            // Rectangle lower portion
+            parts.push_str(&format!(
+                r#"<rect x="{hl}" y="{}" width="{hw}" height="{}" rx="2" fill="{}"/>"#,
+                dome_cy as u32, ((s * 0.7) - dome_cy) as u32, hex_color(body_color)
+            ));
+        }
+        2 => {
+            // Hexagonal head
+            let cx = s * 0.5;
+            let cy = s * 0.45;
+            let rx = s * 0.3;
+            let ry = s * 0.25;
+            let points: String = (0..6)
+                .map(|i| {
+                    let angle = std::f64::consts::PI / 3.0 * i as f64 - std::f64::consts::PI / 6.0;
+                    format!("{},{}", (cx + rx * angle.cos()) as u32, (cy + ry * angle.sin()) as u32)
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            parts.push_str(&format!(
+                r#"<polygon points="{points}" fill="{}"/>"#,
+                hex_color(body_color)
+            ));
+        }
+        3 => {
+            // Trapezoid: wider at top
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{} {},{}" fill="{}"/>"#,
+                (s * 0.15) as u32, (s * 0.2) as u32,
+                (s * 0.85) as u32, (s * 0.2) as u32,
+                (s * 0.75) as u32, (s * 0.7) as u32,
+                (s * 0.25) as u32, (s * 0.7) as u32,
+                hex_color(body_color)
+            ));
+        }
+        _ => {
+            // Classic rectangle
+            parts.push_str(&format!(
+                r#"<rect x="{hl}" y="{ht}" width="{hw}" height="{hh}" rx="4" fill="{}"/>"#,
+                hex_color(body_color)
+            ));
+        }
+    }
 
     // Ears
     let ear_style = hash[12] % 4;
@@ -1400,6 +1631,125 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
             r#"<rect x="{}" y="{chin_y}" width="{}" height="{chin_h}" rx="1" fill="{}"/>"#,
             ax - chin_w, chin_w * 2, hex_color(accent_color)
         ));
+    }
+
+    // Neck/collar
+    let neck_style = hash[18] % 4;
+    let neck_y = (s * 0.68) as u32;
+    match neck_style {
+        1 => {
+            // Simple collar band
+            let collar_w = (s * 0.22) as u32;
+            let collar_h = (s * 0.04) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{neck_y}" width="{}" height="{collar_h}" rx="2" fill="{}"/>"#,
+                ax - collar_w, collar_w * 2, hex_color(accent_color)
+            ));
+        }
+        2 => {
+            // Double-line collar
+            let collar_w = (s * 0.2) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{neck_y}" width="{}" height="2" fill="{}"/>"#,
+                ax - collar_w, collar_w * 2, hex_color(accent_color)
+            ));
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{}" width="{}" height="2" fill="{}"/>"#,
+                ax - collar_w, neck_y + 4, collar_w * 2, hex_color(accent_color)
+            ));
+        }
+        3 => {
+            // Collar with center gem
+            let collar_w = (s * 0.2) as u32;
+            let collar_h = (s * 0.03) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{neck_y}" width="{}" height="{collar_h}" rx="1" fill="{}"/>"#,
+                ax - collar_w, collar_w * 2, hex_color(accent_color)
+            ));
+            let gem_r = (s * 0.02) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{ax}" cy="{}" r="{gem_r}" fill="{}"/>"#,
+                neck_y + collar_h / 2, hex_color(eye_color)
+            ));
+        }
+        _ => {} // No collar
+    }
+
+    // Shoulder pads
+    let shoulder_style = hash[19] % 3;
+    let shoulder_y = (s * 0.72) as u32;
+    match shoulder_style {
+        1 => {
+            // Rectangular shoulder pads
+            let pad_w = (s * 0.12) as u32;
+            let pad_h = (s * 0.06) as u32;
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{shoulder_y}" width="{pad_w}" height="{pad_h}" rx="2" fill="{}"/>"#,
+                (s * 0.12) as u32, hex_color(body_color)
+            ));
+            parts.push_str(&format!(
+                r#"<rect x="{}" y="{shoulder_y}" width="{pad_w}" height="{pad_h}" rx="2" fill="{}"/>"#,
+                (s * 0.88) as u32 - pad_w, hex_color(body_color)
+            ));
+        }
+        2 => {
+            // Rounded shoulder pads
+            let pad_r = (s * 0.06) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{}" cy="{}" r="{pad_r}" fill="{}"/>"#,
+                (s * 0.18) as u32, shoulder_y + pad_r / 2, hex_color(body_color)
+            ));
+            parts.push_str(&format!(
+                r#"<circle cx="{}" cy="{}" r="{pad_r}" fill="{}"/>"#,
+                (s * 0.82) as u32, shoulder_y + pad_r / 2, hex_color(body_color)
+            ));
+        }
+        _ => {} // No shoulder pads
+    }
+
+    // Chest emblem
+    let emblem_style = hash[20] % 4;
+    let emblem_y = (s * 0.78) as u32;
+    match emblem_style {
+        1 => {
+            // Circle emblem
+            let er = (s * 0.04) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{ax}" cy="{emblem_y}" r="{er}" fill="{}"/>"#,
+                hex_color(eye_color)
+            ));
+        }
+        2 => {
+            // Diamond emblem
+            let ed = (s * 0.04) as u32;
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{} {},{}" fill="{}"/>"#,
+                ax, emblem_y - ed,
+                ax + ed, emblem_y,
+                ax, emblem_y + ed,
+                ax - ed, emblem_y,
+                hex_color(eye_color)
+            ));
+        }
+        3 => {
+            // Star emblem (hexagram from two triangles)
+            let sr = (s * 0.04) as u32;
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{}" fill="{}" opacity="0.9"/>"#,
+                ax, emblem_y - sr,
+                ax + sr, emblem_y + sr / 2,
+                ax - sr, emblem_y + sr / 2,
+                hex_color(eye_color)
+            ));
+            parts.push_str(&format!(
+                r#"<polygon points="{},{} {},{} {},{}" fill="{}" opacity="0.9"/>"#,
+                ax, emblem_y + sr,
+                ax + sr, emblem_y - sr / 2,
+                ax - sr, emblem_y - sr / 2,
+                hex_color(eye_color)
+            ));
+        }
+        _ => {} // No emblem
     }
 
     format!(
@@ -2237,5 +2587,232 @@ mod tests {
     fn test_sunset_unicode_seed() {
         let result = generate_png("🌅🌄", "sunset", 128, None);
         assert!(result.is_ok());
+    }
+
+    // ---- Robot head shape tests ----
+
+    #[test]
+    fn test_robot_head_shapes_deterministic() {
+        // Each seed produces a specific head shape; verify determinism
+        for seed in &["dome-head", "hex-head", "trap-head", "square-head"] {
+            let img1 = generate_png(seed, "robot", 256, None).unwrap();
+            let img2 = generate_png(seed, "robot", 256, None).unwrap();
+            assert_eq!(img1, img2, "Robot with seed '{seed}' must be deterministic");
+        }
+    }
+
+    #[test]
+    fn test_robot_head_shapes_produce_different_output() {
+        // Find seeds that trigger each head shape (hash[17] % 4)
+        // We test many seeds to ensure variety
+        let mut shapes_seen = std::collections::HashSet::new();
+        for i in 0..100 {
+            let seed = format!("robot-shape-test-{i}");
+            let hash = hash_seed(&seed);
+            shapes_seen.insert(hash[17] % 4);
+            if shapes_seen.len() == 4 {
+                break;
+            }
+        }
+        assert_eq!(shapes_seen.len(), 4, "Should see all 4 head shapes among 100 seeds");
+    }
+
+    #[test]
+    fn test_robot_dome_head_png() {
+        // Find a seed that triggers dome head (hash[17] % 4 == 1)
+        let seed = find_seed_for_robot_feature(17, 4, 1);
+        let result = generate_png(&seed, "robot", 256, None);
+        assert!(result.is_ok(), "Dome head should generate valid PNG");
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_robot_hex_head_png() {
+        let seed = find_seed_for_robot_feature(17, 4, 2);
+        let result = generate_png(&seed, "robot", 256, None);
+        assert!(result.is_ok(), "Hex head should generate valid PNG");
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_robot_trapezoid_head_png() {
+        let seed = find_seed_for_robot_feature(17, 4, 3);
+        let result = generate_png(&seed, "robot", 256, None);
+        assert!(result.is_ok(), "Trapezoid head should generate valid PNG");
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_robot_dome_head_svg() {
+        let seed = find_seed_for_robot_feature(17, 4, 1);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("<path"), "Dome SVG should use path element for arc");
+    }
+
+    #[test]
+    fn test_robot_hex_head_svg() {
+        let seed = find_seed_for_robot_feature(17, 4, 2);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("<polygon"), "Hex SVG should use polygon element");
+    }
+
+    #[test]
+    fn test_robot_trapezoid_head_svg() {
+        let seed = find_seed_for_robot_feature(17, 4, 3);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("<polygon"), "Trapezoid SVG should use polygon element");
+    }
+
+    #[test]
+    fn test_robot_classic_head_svg() {
+        let seed = find_seed_for_robot_feature(17, 4, 0);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("rx=\"4\""), "Classic head should use rounded rect");
+    }
+
+    // ---- Robot accessory tests ----
+
+    #[test]
+    fn test_robot_collar_styles() {
+        let mut styles_seen = std::collections::HashSet::new();
+        for i in 0..100 {
+            let seed = format!("collar-test-{i}");
+            let hash = hash_seed(&seed);
+            styles_seen.insert(hash[18] % 4);
+            if styles_seen.len() == 4 { break; }
+        }
+        assert_eq!(styles_seen.len(), 4, "Should see all 4 collar styles");
+    }
+
+    #[test]
+    fn test_robot_collar_band_svg() {
+        let seed = find_seed_for_robot_feature(18, 4, 1);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        // Collar band should add a rect near y=0.68*256 = 174
+        assert!(svg.contains("<svg"), "Should be valid SVG");
+    }
+
+    #[test]
+    fn test_robot_collar_gem_svg() {
+        let seed = find_seed_for_robot_feature(18, 4, 3);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        // Gem collar should have circle elements (gem + possible other circles)
+        assert!(svg.contains("circle"), "Gem collar should include circle element");
+    }
+
+    #[test]
+    fn test_robot_shoulder_styles() {
+        let mut styles_seen = std::collections::HashSet::new();
+        for i in 0..100 {
+            let seed = format!("shoulder-test-{i}");
+            let hash = hash_seed(&seed);
+            styles_seen.insert(hash[19] % 3);
+            if styles_seen.len() == 3 { break; }
+        }
+        assert_eq!(styles_seen.len(), 3, "Should see all 3 shoulder styles");
+    }
+
+    #[test]
+    fn test_robot_emblem_styles() {
+        let mut styles_seen = std::collections::HashSet::new();
+        for i in 0..100 {
+            let seed = format!("emblem-test-{i}");
+            let hash = hash_seed(&seed);
+            styles_seen.insert(hash[20] % 4);
+            if styles_seen.len() == 4 { break; }
+        }
+        assert_eq!(styles_seen.len(), 4, "Should see all 4 emblem styles");
+    }
+
+    #[test]
+    fn test_robot_diamond_emblem_svg() {
+        let seed = find_seed_for_robot_feature(20, 4, 2);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("polygon"), "Diamond emblem should use polygon");
+    }
+
+    #[test]
+    fn test_robot_star_emblem_svg() {
+        let seed = find_seed_for_robot_feature(20, 4, 3);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("polygon"), "Star emblem should use polygons");
+    }
+
+    #[test]
+    fn test_robot_all_sizes_with_accessories() {
+        // Ensure all sizes work with new accessories
+        for size in &[16, 64, 128, 256, 512] {
+            let result = generate_png("full-robot-test", "robot", *size, None);
+            assert!(result.is_ok(), "Robot at size {size} should work");
+        }
+    }
+
+    #[test]
+    fn test_robot_svg_all_sizes_with_accessories() {
+        for size in &[16, 64, 128, 256, 512] {
+            let result = generate_svg("full-robot-test", "robot", *size, None);
+            assert!(result.is_ok(), "Robot SVG at size {size} should work");
+        }
+    }
+
+    #[test]
+    fn test_robot_bg_override_with_new_shapes() {
+        for shape_seed in &["dome-test", "hex-test", "trap-test"] {
+            let with_bg = generate_png(shape_seed, "robot", 128, Some((255, 0, 0))).unwrap();
+            let without_bg = generate_png(shape_seed, "robot", 128, None).unwrap();
+            assert_ne!(with_bg, without_bg, "Background override should change robot output");
+        }
+    }
+
+    #[test]
+    fn test_fill_polygon_triangle() {
+        let mut img: RgbaImage = ImageBuffer::new(100, 100);
+        let vertices = vec![(50.0, 10.0), (90.0, 90.0), (10.0, 90.0)];
+        fill_polygon(&mut img, &vertices, (255, 0, 0));
+        // Center of triangle should be filled
+        let px = img.get_pixel(50, 60);
+        assert_eq!(px[0], 255, "Triangle center should be red");
+        // Corner outside should be background (0,0,0,0)
+        let outside = img.get_pixel(5, 5);
+        assert_eq!(outside[0], 0, "Outside triangle should be empty");
+    }
+
+    #[test]
+    fn test_fill_polygon_empty() {
+        let mut img: RgbaImage = ImageBuffer::new(100, 100);
+        fill_polygon(&mut img, &[], (255, 0, 0));
+        // Should not crash, image should be unchanged
+        let px = img.get_pixel(50, 50);
+        assert_eq!(px[0], 0);
+    }
+
+    #[test]
+    fn test_fill_polygon_hexagon() {
+        let mut img: RgbaImage = ImageBuffer::new(200, 200);
+        let cx = 100.0_f64;
+        let cy = 100.0_f64;
+        let r = 50.0_f64;
+        let vertices: Vec<(f64, f64)> = (0..6)
+            .map(|i| {
+                let angle = std::f64::consts::PI / 3.0 * i as f64;
+                (cx + r * angle.cos(), cy + r * angle.sin())
+            })
+            .collect();
+        fill_polygon(&mut img, &vertices, (0, 255, 0));
+        // Center should be filled
+        let px = img.get_pixel(100, 100);
+        assert_eq!(px[1], 255, "Hexagon center should be green");
+    }
+
+    // Helper: find a seed whose hash[byte_idx] % modulo == target
+    fn find_seed_for_robot_feature(byte_idx: usize, modulo: u8, target: u8) -> String {
+        for i in 0..10000 {
+            let seed = format!("find-feature-{byte_idx}-{target}-{i}");
+            let hash = hash_seed(&seed);
+            if hash[byte_idx] % modulo == target {
+                return seed;
+            }
+        }
+        panic!("Could not find seed for byte[{byte_idx}] % {modulo} == {target}");
     }
 }

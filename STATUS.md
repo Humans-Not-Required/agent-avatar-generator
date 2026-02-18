@@ -1,6 +1,6 @@
 # Agent Avatar Generator - Status
 
-## Current State: 10 Styles, Gallery View, Sunset ✅
+## Current State: 10 Styles, Enhanced Robot, Gallery View ✅
 
 Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
@@ -14,7 +14,7 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 - **9 Avatar Styles:**
   - `geometric` — 5×5 vertically symmetric grid identicon (default)
   - `rings` — Concentric colored rings
-  - `robot` — Procedural robot faces with ears, visor, forehead marking, cheek bolts, chin plate (864+ unique combos)
+  - `robot` — Procedural robot faces with 4 head shapes (square, dome, hexagonal, trapezoid), antennas, ears, visor, forehead marking, cheek bolts, mouth, chin plate, collar (4 styles), shoulder pads (3 styles), chest emblem (4 styles) — 20,000+ unique combos
   - `blockies` — 8×8 Ethereum-style colored grid
   - `gradient` — Two-color gradient with geometric overlay shape
   - `initials` — 1-2 letter initials on colored background (embedded 5×7 bitmap font for PNG, native text for SVG)
@@ -39,8 +39,8 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 - **Discovery:** `/api/v1/openapi.json`, `/llms.txt`, `/.well-known/skills/agent-avatar-generator/SKILL.md`
 - **Docker:** Multi-stage build, single port
 - **CI/CD:** GitHub Actions → ghcr.io + Watchtower auto-deploy
-- **Tests:** 120 Rust (51 unit + 69 HTTP integration via separate targets)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 85 integration tests.
+- **Tests:** 215 Rust (73 unit + 73 lib + 69 HTTP integration)
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 108 integration tests.
 
 ### Tech Stack
 
@@ -54,10 +54,10 @@ Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG outp
 
 ### What's Next
 
-- More robot head shapes (dome, hexagonal), accessories
 - Performance optimization for large batch requests
 - Gallery: download all as ZIP, share gallery URL
 - Color themes: user-specified palette/mood presets
+- Additional robot antenna styles and eye glow effects
 
 ### ⚠️ Gotchas
 

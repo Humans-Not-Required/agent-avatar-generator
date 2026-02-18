@@ -21,7 +21,7 @@ pub fn available_styles() -> Vec<StyleInfo> {
         },
         StyleInfo {
             name: "robot".to_string(),
-            description: "Procedural robot faces. Agent-themed with varying features.".to_string(),
+            description: "Procedural robot faces with 4 head shapes (square, dome, hexagonal, trapezoid), antennas, visors, ears, collar, shoulder pads, and chest emblems.".to_string(),
             sample_seed: "nanook".to_string(),
         },
         StyleInfo {
