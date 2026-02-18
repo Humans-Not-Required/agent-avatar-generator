@@ -716,6 +716,12 @@ pub fn skills_skill_md() -> RawText<&'static str> {
     RawText(include_str!("../SKILL.md"))
 }
 
+/// GET /skills/SKILL.md — alternate path for agent discoverability
+#[get("/skills/SKILL.md")]
+pub fn api_skills_skill_md() -> RawText<&'static str> {
+    RawText(include_str!("../SKILL.md"))
+}
+
 /// GET /avatar/view/<seed> — share URL with preview
 #[get("/avatar/view/<seed>?<style>&<size>")]
 pub fn view_avatar(seed: &str, style: Option<String>, size: Option<u32>) -> RawHtml<String> {
@@ -758,10 +764,10 @@ pub fn view_avatar(seed: &str, style: Option<String>, size: Option<u32>) -> RawH
 
 /// Catch-all SPA fallback
 #[get("/<_path..>", rank = 100)]
-pub fn spa_fallback(_path: std::path::PathBuf) -> Option<rocket::fs::NamedFile> {
+pub fn spa_fallback(_path: std::path::PathBuf) -> Option<(ContentType, Vec<u8>)> {
     let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "../frontend/dist".to_string());
     let index = std::path::PathBuf::from(static_dir).join("index.html");
-    rocket::tokio::runtime::Handle::current().block_on(rocket::fs::NamedFile::open(index)).ok()
+    std::fs::read(&index).ok().map(|bytes| (ContentType::HTML, bytes))
 }
 
 // ── Request/Response Types ──
@@ -841,6 +847,7 @@ pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
                 list_themes,
                 batch_generate,
                 gallery_zip,
+                api_skills_skill_md,
             ],
         )
         .mount(

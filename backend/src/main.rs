@@ -48,6 +48,7 @@ fn rocket() -> _ {
                 routes::list_themes,
                 routes::batch_generate,
                 routes::gallery_zip,
+                routes::api_skills_skill_md,
             ],
         )
         .mount(

@@ -425,6 +425,15 @@ fn test_skills_skill_md() {
     assert!(body.contains("Agent Avatar Generator"));
 }
 
+#[test]
+fn test_api_v1_skills_skill_md() {
+    let client = client();
+    let response = client.get("/api/v1/skills/SKILL.md").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("Agent Avatar Generator"));
+}
+
 // ── View Page ──
 
 #[test]
