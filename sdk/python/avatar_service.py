@@ -70,9 +70,12 @@ class AvatarService:
             content_type = resp.headers.get("Content-Type", "")
             raw = resp.read()
 
+            # Normalize header keys to lowercase for case-insensitive access
+            resp_headers = {k.lower(): v for k, v in resp.headers.items()}
+
             if "application/json" in content_type:
-                return json.loads(raw), resp.status, dict(resp.headers)
-            return raw, resp.status, dict(resp.headers)
+                return json.loads(raw), resp.status, resp_headers
+            return raw, resp.status, resp_headers
 
         except HTTPError as e:
             body_text = e.read().decode("utf-8", errors="replace")
@@ -118,7 +121,7 @@ class AvatarService:
             params["theme"] = theme
         qs = urlencode(params)
         data, status, headers = self._request("GET", f"/api/v1/avatar/{quote(seed, safe='')}?{qs}")
-        gen_ms = headers.get("X-Generation-Time-Ms")
+        gen_ms = headers.get("x-generation-time-ms")
         if gen_ms is not None:
             gen_ms = float(gen_ms)
         return data, gen_ms
@@ -191,10 +194,10 @@ class AvatarService:
         if theme:
             body["theme"] = theme
         data, status, headers = self._request("POST", "/api/v1/avatar/gallery/zip", body=body)
-        gen_ms = headers.get("X-Generation-Time-Ms")
+        gen_ms = headers.get("x-generation-time-ms")
         if gen_ms is not None:
             gen_ms = float(gen_ms)
-        count = headers.get("X-Avatar-Count")
+        count = headers.get("x-avatar-count")
         if count is not None:
             count = int(count)
         return data, gen_ms, count
