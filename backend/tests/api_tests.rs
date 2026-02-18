@@ -275,7 +275,7 @@ fn test_list_styles() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let styles = body.as_array().unwrap();
-    assert_eq!(styles.len(), 9);
+    assert_eq!(styles.len(), 10);
     let names: Vec<&str> = styles.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"geometric"));
     assert!(names.contains(&"rings"));

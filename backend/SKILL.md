@@ -15,7 +15,7 @@ GET /api/v1/avatar/{seed}?style=geometric&size=256&format=png
 
 **Parameters:**
 - `seed` (path, required): Any string — agent ID, email, name, UUID
-- `style` (query): `geometric` | `rings` | `robot` | `blockies` | `gradient` | `initials` | `starburst` | `mosaic` | `pixel` (default: `geometric`)
+- `style` (query): `geometric` | `rings` | `robot` | `blockies` | `gradient` | `initials` | `starburst` | `mosaic` | `pixel` | `sunset` (default: `geometric`)
 - `size` (query): 16–1024 pixels (default: 256)
 - `format` (query): `png` | `svg` (default: `png`)
 - `background` (query): Hex color override (e.g., `ff0000`)
@@ -55,6 +55,7 @@ GET /api/v1/health
 | `starburst` | Radial rays with fading edges |
 | `mosaic` | 6×6 grid of shapes with harmonious colors |
 | `pixel` | Retro pixel art creatures (space-invader style) |
+| `sunset` | Layered horizon bands with harmonious colors and sun glow |
 
 ## Example Usage
 

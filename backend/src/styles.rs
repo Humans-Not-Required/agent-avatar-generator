@@ -54,11 +54,16 @@ pub fn available_styles() -> Vec<StyleInfo> {
             description: "Retro pixel art creatures with horizontal symmetry. Space-invader inspired.".to_string(),
             sample_seed: "nanook".to_string(),
         },
+        StyleInfo {
+            name: "sunset".to_string(),
+            description: "Layered horizon bands with harmonious colors, wavy edges, and optional sun glow.".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
     ]
 }
 
 pub fn is_valid_style(style: &str) -> bool {
-    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic" | "pixel")
+    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic" | "pixel" | "sunset")
 }
 
 pub const DEFAULT_STYLE: &str = "geometric";

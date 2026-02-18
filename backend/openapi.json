@@ -14,7 +14,7 @@
         "description": "Generate a deterministic avatar from a seed string",
         "parameters": [
           { "name": "seed", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "style", "in": "query", "schema": { "type": "string", "enum": ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"], "default": "geometric" } },
+          { "name": "style", "in": "query", "schema": { "type": "string", "enum": ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"], "default": "geometric" } },
           { "name": "size", "in": "query", "schema": { "type": "integer", "minimum": 16, "maximum": 1024, "default": 256 } },
           { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["png", "svg"], "default": "png" } },
           { "name": "background", "in": "query", "schema": { "type": "string", "description": "Hex color (e.g. ff0000)" } }

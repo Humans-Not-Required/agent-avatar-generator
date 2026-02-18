@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel'];
+const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset'];
 const API_BASE = window.location.origin;
 const DEFAULT_GALLERY_SEEDS = 'nanook\nforge\ndrift\nlux\ngerundium\nsmoltbot\nclawrecipes\nagent-42';
 

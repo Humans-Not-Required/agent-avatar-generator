@@ -106,13 +106,13 @@ class TestStyles(unittest.TestCase):
         self.client = AvatarService()
 
     def test_all_styles_png(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"]:
             data = self.client.generate("test", style=style)
             self.assertIsInstance(data, bytes, f"Style {style} should return bytes")
             self.assertTrue(len(data) > 0, f"Style {style} should return non-empty")
 
     def test_all_styles_svg(self):
-        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"]:
+        for style in ["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"]:
             data = self.client.generate_svg("test", style=style)
             self.assertIsInstance(data, str, f"Style {style} SVG should return string")
             self.assertTrue(data.startswith("<svg"), f"Style {style} SVG should start with <svg")
@@ -131,6 +131,7 @@ class TestStyles(unittest.TestCase):
         self.assertIn("starburst", names)
         self.assertIn("mosaic", names)
         self.assertIn("pixel", names)
+        self.assertIn("sunset", names)
 
     def test_styles_have_description(self):
         styles = self.client.styles()
@@ -498,6 +499,78 @@ class TestPixelStyle(unittest.TestCase):
         for item in results:
             decoded = base64.b64decode(item["data"]).decode("utf-8")
             self.assertIn("<rect", decoded)
+
+
+class TestSunsetStyle(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        url = os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        cls.client = AvatarService(url)
+
+    def test_sunset_png(self):
+        data = self.client.generate_png("horizon", style="sunset")
+        self.assertTrue(data[:4] == b'\x89PNG')
+
+    def test_sunset_svg(self):
+        svg = self.client.generate_svg("horizon", style="sunset")
+        self.assertIn("<svg", svg)
+        self.assertIn("<linearGradient", svg)
+
+    def test_sunset_deterministic(self):
+        a = self.client.generate("dawn", style="sunset", size=128)
+        b = self.client.generate("dawn", style="sunset", size=128)
+        self.assertEqual(a, b)
+
+    def test_sunset_different_seeds(self):
+        a = self.client.generate("dawn", style="sunset", size=128)
+        b = self.client.generate("dusk", style="sunset", size=128)
+        self.assertNotEqual(a, b)
+
+    def test_sunset_multiple_sizes(self):
+        for sz in [16, 64, 128, 256, 512]:
+            data = self.client.generate("sunset-size", style="sunset", size=sz)
+            self.assertIsNotNone(data)
+
+    def test_sunset_with_bg(self):
+        data = self.client.generate("sunset-bg", style="sunset", background="001133")
+        self.assertIsNotNone(data)
+
+    def test_sunset_batch(self):
+        results = self.client.batch(["s1", "s2", "s3"], style="sunset")
+        self.assertEqual(len(results), 3)
+        for item in results:
+            self.assertIn("seed", item)
+            self.assertIn("data", item)
+
+    def test_sunset_save_png(self):
+        path = "/tmp/test_sunset.png"
+        self.client.save("sunset-save", path, style="sunset")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "rb") as f:
+            self.assertTrue(f.read(4) == b'\x89PNG')
+        os.unlink(path)
+
+    def test_sunset_save_svg(self):
+        path = "/tmp/test_sunset.svg"
+        self.client.save("sunset-save", path, style="sunset", fmt="svg")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "r") as f:
+            content = f.read()
+            self.assertIn("<svg", content)
+        os.unlink(path)
+
+    def test_sunset_batch_svg(self):
+        results = self.client.batch(["s1", "s2"], style="sunset", fmt="svg")
+        self.assertEqual(len(results), 2)
+        for item in results:
+            decoded = base64.b64decode(item["data"]).decode("utf-8")
+            self.assertIn("<svg", decoded)
+
+    def test_sunset_harmony_colors(self):
+        """Sunset should produce varied but valid output for many seeds."""
+        for i in range(10):
+            data = self.client.generate_png(f"harmony-{i}", style="sunset")
+            self.assertTrue(len(data) > 100)
 
 
 class TestConstructor(unittest.TestCase):

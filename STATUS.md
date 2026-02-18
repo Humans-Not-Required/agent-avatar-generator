@@ -1,8 +1,8 @@
 # Agent Avatar Generator - Status
 
-## Current State: 9 Styles, Gallery View, Pixel Art ✅
+## Current State: 10 Styles, Gallery View, Sunset ✅
 
-Self-hosted deterministic avatar generation service with 9 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, zero clippy warnings, CI configured.
+Self-hosted deterministic avatar generation service with 10 styles, PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
 ### What's Done
 
@@ -21,6 +21,7 @@ Self-hosted deterministic avatar generation service with 9 styles, PNG/SVG outpu
   - `starburst` — Radial rays from center with variable ray count, 3-color palette, edge fading, center dot
   - `mosaic` — 6×6 grid of geometric shapes with harmonious color palettes (complementary/triadic/analogous/split-complementary)
   - `pixel` — Retro pixel art creatures with horizontal symmetry, 11×11 grid, 3-color palette, visible pixel gaps (space-invader inspired)
+  - `sunset` — Layered horizon bands using harmonious color palette, wavy edges between bands, optional sun with glow effect
 - **Output Formats:** PNG + SVG for all styles
 - **Deterministic:** Same seed → identical output, always. SHA-256 hashing.
 - **Rate Limiting:** 200 req/min per IP with headers
@@ -38,7 +39,7 @@ Self-hosted deterministic avatar generation service with 9 styles, PNG/SVG outpu
 - **Discovery:** `/api/v1/openapi.json`, `/llms.txt`, `/.well-known/skills/agent-avatar-generator/SKILL.md`
 - **Docker:** Multi-stage build, single port
 - **CI/CD:** GitHub Actions → ghcr.io + Watchtower auto-deploy
-- **Tests:** 69 Rust (42 unit + 27 HTTP integration via separate targets), zero clippy warnings
+- **Tests:** 120 Rust (51 unit + 69 HTTP integration via separate targets)
 - ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. 85 integration tests.
 
 ### Tech Stack
@@ -55,8 +56,8 @@ Self-hosted deterministic avatar generation service with 9 styles, PNG/SVG outpu
 
 - More robot head shapes (dome, hexagonal), accessories
 - Performance optimization for large batch requests
-- Add color harmony option to existing styles (gradient, rings)
 - Gallery: download all as ZIP, share gallery URL
+- Color themes: user-specified palette/mood presets
 
 ### ⚠️ Gotchas
 

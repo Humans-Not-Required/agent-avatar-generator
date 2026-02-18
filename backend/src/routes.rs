@@ -75,7 +75,7 @@ fn validate_params(
             Status::BadRequest,
             Json(ApiError {
                 error: format!("Unknown style: {style}"),
-                detail: Some("Valid styles: geometric, rings, robot, blockies, gradient, initials, starburst, mosaic, pixel".to_string()),
+                detail: Some("Valid styles: geometric, rings, robot, blockies, gradient, initials, starburst, mosaic, pixel, sunset".to_string()),
             }),
         ));
     }

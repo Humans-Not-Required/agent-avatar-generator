@@ -869,6 +869,128 @@ pub fn generate_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     img
 }
 
+/// Generate a layered sunset/horizon avatar using harmonious color palette.
+pub fn generate_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let palette = harmonious_palette(&hash);
+    let bg = bg_override.unwrap_or_else(|| {
+        // Deep sky color as background
+        let base_hue = ((hash[0] as f64 * 256.0 + hash[1] as f64) / 65535.0) * 360.0;
+        hsl_to_rgb(base_hue, 0.6, 0.25)
+    });
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    let s = size as f64;
+
+    // Number of horizontal bands (4-6 based on hash)
+    let num_bands = 4 + (hash[5] % 3) as usize;
+
+    // Build band colors from palette + variations
+    let mut band_colors: Vec<(u8, u8, u8)> = Vec::new();
+    for i in 0..num_bands {
+        let base = palette[i % palette.len()];
+        // Shift lightness progressively: top bands darker, bottom brighter
+        let factor = 0.7 + (i as f64 / num_bands as f64) * 0.6; // 0.7 → 1.3
+        let r = ((base.0 as f64 * factor).min(255.0)) as u8;
+        let g = ((base.1 as f64 * factor).min(255.0)) as u8;
+        let b = ((base.2 as f64 * factor).min(255.0)) as u8;
+        band_colors.push((r, g, b));
+    }
+
+    // Band boundaries with wave distortion
+    let band_height = s / num_bands as f64;
+
+    for band_idx in 0..num_bands {
+        let base_y = (band_idx as f64 * band_height) as u32;
+        let next_y = ((band_idx + 1) as f64 * band_height) as u32;
+        let color = band_colors[band_idx];
+        let next_color = if band_idx + 1 < num_bands {
+            band_colors[band_idx + 1]
+        } else {
+            color
+        };
+
+        // Wave parameters for this band's top edge
+        let wave_amp = s * 0.02 + (hash[(band_idx * 4 + 10) % 32] as f64 / 255.0) * s * 0.03;
+        let wave_freq = 2.0 + (hash[(band_idx * 4 + 11) % 32] as f64 / 255.0) * 3.0;
+        let wave_phase = (hash[(band_idx * 4 + 12) % 32] as f64 / 255.0) * std::f64::consts::PI * 2.0;
+
+        for y in base_y..next_y.min(size) {
+            // Progress through this band (0.0 → 1.0)
+            let t = (y - base_y) as f64 / (next_y - base_y).max(1) as f64;
+
+            // Blend with next band near the boundary
+            let blend_start = 0.7;
+            let (r, g, b) = if t > blend_start {
+                let bt = (t - blend_start) / (1.0 - blend_start);
+                (
+                    lerp_u8(color.0, next_color.0, bt),
+                    lerp_u8(color.1, next_color.1, bt),
+                    lerp_u8(color.2, next_color.2, bt),
+                )
+            } else {
+                color
+            };
+
+            for x in 0..size {
+                // Apply wave distortion to the y coordinate
+                let wave = (x as f64 / s * wave_freq * std::f64::consts::PI + wave_phase).sin() * wave_amp;
+                let effective_y = y as f64 + wave;
+
+                // Only draw if the effective y is within this band's range
+                if effective_y >= base_y as f64 && effective_y < next_y as f64 {
+                    img.put_pixel(x, y, Rgba([r, g, b, 255]));
+                }
+            }
+        }
+    }
+
+    // Sun/moon circle (position and size from hash)
+    let sun_present = hash[7] % 3 != 0; // 2/3 chance of having a sun
+    if sun_present {
+        let sun_x = s * 0.2 + (hash[8] as f64 / 255.0) * s * 0.6;
+        let sun_y = s * 0.15 + (hash[9] as f64 / 255.0) * s * 0.3;
+        let sun_r = s * 0.06 + (hash[10] as f64 / 255.0) * s * 0.06;
+
+        // Sun color: warm tint of first palette color
+        let sun_base = palette[0];
+        let sun_color = (
+            ((sun_base.0 as u16 + 255) / 2) as u8,
+            ((sun_base.1 as u16 + 200) / 2) as u8,
+            ((sun_base.2 as u16 + 150) / 2) as u8,
+        );
+
+        // Draw sun with soft glow
+        let glow_r = sun_r * 1.8;
+        for y in 0..size {
+            for x in 0..size {
+                let dx = x as f64 - sun_x;
+                let dy = y as f64 - sun_y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                if dist < sun_r {
+                    // Solid sun
+                    img.put_pixel(x, y, Rgba([sun_color.0, sun_color.1, sun_color.2, 255]));
+                } else if dist < glow_r {
+                    // Glow: blend with existing pixel
+                    let glow_t = 1.0 - (dist - sun_r) / (glow_r - sun_r);
+                    let alpha = (glow_t * glow_t * 120.0) as u8; // Quadratic falloff
+                    let existing = img.get_pixel(x, y);
+                    let r = lerp_u8(existing[0], sun_color.0, alpha as f64 / 255.0);
+                    let g = lerp_u8(existing[1], sun_color.1, alpha as f64 / 255.0);
+                    let b = lerp_u8(existing[2], sun_color.2, alpha as f64 / 255.0);
+                    img.put_pixel(x, y, Rgba([r, g, b, 255]));
+                }
+            }
+        }
+    }
+
+    img
+}
+
 /// Generate an avatar as PNG bytes.
 pub fn generate_png(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>) -> Result<Vec<u8>, String> {
     let img = generate_image(seed, style, size, bg)?;
@@ -891,6 +1013,7 @@ pub fn generate_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>
         "starburst" => Ok(svg_starburst(seed, size, bg)),
         "mosaic" => Ok(svg_mosaic(seed, size, bg)),
         "pixel" => Ok(svg_pixel(seed, size, bg)),
+        "sunset" => Ok(svg_sunset(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -907,6 +1030,7 @@ pub fn generate_image(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8
         "starburst" => Ok(generate_starburst(seed, size, bg)),
         "mosaic" => Ok(generate_mosaic(seed, size, bg)),
         "pixel" => Ok(generate_pixel(seed, size, bg)),
+        "sunset" => Ok(generate_sunset(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -1600,6 +1724,112 @@ fn svg_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
     )
 }
 
+fn svg_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let palette = harmonious_palette(&hash);
+    let bg = bg_override.unwrap_or_else(|| {
+        let base_hue = ((hash[0] as f64 * 256.0 + hash[1] as f64) / 65535.0) * 360.0;
+        hsl_to_rgb(base_hue, 0.6, 0.25)
+    });
+
+    let s = size as f64;
+    let num_bands = 4 + (hash[5] % 3) as usize;
+
+    let mut band_colors: Vec<(u8, u8, u8)> = Vec::new();
+    for i in 0..num_bands {
+        let base = palette[i % palette.len()];
+        let factor = 0.7 + (i as f64 / num_bands as f64) * 0.6;
+        let r = ((base.0 as f64 * factor).min(255.0)) as u8;
+        let g = ((base.1 as f64 * factor).min(255.0)) as u8;
+        let b = ((base.2 as f64 * factor).min(255.0)) as u8;
+        band_colors.push((r, g, b));
+    }
+
+    let band_height = s / num_bands as f64;
+    let mut elements = String::new();
+
+    // Build SVG with gradient-filled bands using linearGradients + wavy clip paths
+    let mut defs = String::from("<defs>");
+
+    for band_idx in 0..num_bands {
+        let color = band_colors[band_idx];
+        let next_color = if band_idx + 1 < num_bands {
+            band_colors[band_idx + 1]
+        } else {
+            color
+        };
+
+        // Gradient for this band (vertical blend at boundary)
+        let grad_id = format!("g{band_idx}");
+        defs.push_str(&format!(
+            r#"<linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="{}"/><stop offset="70%" stop-color="{}"/><stop offset="100%" stop-color="{}"/></linearGradient>"#,
+            hex_color(color), hex_color(color), hex_color(next_color),
+        ));
+
+        let y = (band_idx as f64 * band_height) as i32;
+        let h = (band_height as i32) + 2; // +2 to avoid gaps
+
+        // Wavy top edge via clip path
+        let wave_amp = s * 0.02 + (hash[(band_idx * 4 + 10) % 32] as f64 / 255.0) * s * 0.03;
+        let wave_freq = 2.0 + (hash[(band_idx * 4 + 11) % 32] as f64 / 255.0) * 3.0;
+        let wave_phase = (hash[(band_idx * 4 + 12) % 32] as f64 / 255.0) * std::f64::consts::PI * 2.0;
+
+        // Build a wavy path for the top edge
+        let mut path = format!("M0,{}", y + h);
+        let steps = 20;
+        for step in 0..=steps {
+            let x = (step as f64 / steps as f64) * s;
+            let wave = (x / s * wave_freq * std::f64::consts::PI + wave_phase).sin() * wave_amp;
+            let py = y as f64 + wave;
+            path.push_str(&format!(" L{:.1},{:.1}", x, py));
+        }
+        path.push_str(&format!(" L{},{} Z", size, y + h));
+
+        let clip_id = format!("c{band_idx}");
+        defs.push_str(&format!(
+            r#"<clipPath id="{clip_id}"><path d="{path}"/></clipPath>"#,
+        ));
+
+        elements.push_str(&format!(
+            r#"<rect x="0" y="{y}" width="{size}" height="{h}" fill="url(#{grad_id})" clip-path="url(#{clip_id})"/>"#,
+        ));
+    }
+
+    // Sun/moon
+    let sun_present = hash[7] % 3 != 0;
+    if sun_present {
+        let sun_x = s * 0.2 + (hash[8] as f64 / 255.0) * s * 0.6;
+        let sun_y = s * 0.15 + (hash[9] as f64 / 255.0) * s * 0.3;
+        let sun_r = s * 0.06 + (hash[10] as f64 / 255.0) * s * 0.06;
+
+        let sun_base = palette[0];
+        let sun_color = (
+            ((sun_base.0 as u16 + 255) / 2) as u8,
+            ((sun_base.1 as u16 + 200) / 2) as u8,
+            ((sun_base.2 as u16 + 150) / 2) as u8,
+        );
+
+        // Radial gradient for glow
+        let glow_r = sun_r * 1.8;
+        defs.push_str(&format!(
+            r#"<radialGradient id="sun"><stop offset="0%" stop-color="{}" stop-opacity="1"/><stop offset="55%" stop-color="{}" stop-opacity="0.8"/><stop offset="100%" stop-color="{}" stop-opacity="0"/></radialGradient>"#,
+            hex_color(sun_color), hex_color(sun_color), hex_color(sun_color),
+        ));
+
+        elements.push_str(&format!(
+            r#"<circle cx="{:.1}" cy="{:.1}" r="{:.1}" fill="url(#sun)"/>"#,
+            sun_x, sun_y, glow_r,
+        ));
+    }
+
+    defs.push_str("</defs>");
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{defs}<rect width="{size}" height="{size}" fill="{bg}"/>{elements}</svg>"#,
+        bg = hex_color(bg),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1620,7 +1850,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_png() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"] {
             let result = generate_png("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid PNG");
             assert!(!result.unwrap().is_empty(), "Style {style} PNG should not be empty");
@@ -1629,7 +1859,7 @@ mod tests {
 
     #[test]
     fn test_all_styles_svg() {
-        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel"] {
+        for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"] {
             let result = generate_svg("test", style, 128, None);
             assert!(result.is_ok(), "Style {style} should produce valid SVG");
             let svg = result.unwrap();
@@ -1941,5 +2171,71 @@ mod tests {
         // Invalid
         assert_eq!(char_to_font_idx('!'), None);
         assert_eq!(char_to_font_idx(' '), None);
+    }
+
+    // ── Sunset style tests ──
+
+    #[test]
+    fn test_sunset_deterministic() {
+        let img1 = generate_png("horizon", "sunset", 256, None).unwrap();
+        let img2 = generate_png("horizon", "sunset", 256, None).unwrap();
+        assert_eq!(img1, img2);
+    }
+
+    #[test]
+    fn test_sunset_different_seeds() {
+        let img1 = generate_png("dawn", "sunset", 128, None).unwrap();
+        let img2 = generate_png("dusk", "sunset", 128, None).unwrap();
+        assert_ne!(img1, img2);
+    }
+
+    #[test]
+    fn test_sunset_svg_has_gradients() {
+        let svg = generate_svg("horizon", "sunset", 256, None).unwrap();
+        assert!(svg.contains("<linearGradient"), "Sunset SVG should contain gradient defs");
+        assert!(svg.contains("<clipPath"), "Sunset SVG should contain clip paths for wavy edges");
+    }
+
+    #[test]
+    fn test_sunset_svg_deterministic() {
+        let svg1 = generate_svg("sunset-test", "sunset", 256, None).unwrap();
+        let svg2 = generate_svg("sunset-test", "sunset", 256, None).unwrap();
+        assert_eq!(svg1, svg2);
+    }
+
+    #[test]
+    fn test_sunset_bg_override() {
+        let with = generate_png("test", "sunset", 128, Some((0, 0, 50))).unwrap();
+        let without = generate_png("test", "sunset", 128, None).unwrap();
+        assert_ne!(with, without);
+    }
+
+    #[test]
+    fn test_sunset_small_size() {
+        let result = generate_png("small", "sunset", 16, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sunset_large_size() {
+        let result = generate_png("big", "sunset", 512, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sunset_uses_harmony() {
+        // The sunset style should use harmonious_palette, producing distinct
+        // but cohesive colors. Verify it produces valid output for many seeds.
+        for i in 0..20 {
+            let seed = format!("sunset-harmony-{i}");
+            let result = generate_png(&seed, "sunset", 128, None);
+            assert!(result.is_ok(), "Sunset should work for seed: {seed}");
+        }
+    }
+
+    #[test]
+    fn test_sunset_unicode_seed() {
+        let result = generate_png("🌅🌄", "sunset", 128, None);
+        assert!(result.is_ok());
     }
 }
