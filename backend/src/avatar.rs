@@ -950,7 +950,7 @@ pub fn generate_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>)
     }
 
     // Sun/moon circle (position and size from hash)
-    let sun_present = hash[7] % 3 != 0; // 2/3 chance of having a sun
+    let sun_present = !hash[7].is_multiple_of(3); // 2/3 chance of having a sun
     if sun_present {
         let sun_x = s * 0.2 + (hash[8] as f64 / 255.0) * s * 0.6;
         let sun_y = s * 0.15 + (hash[9] as f64 / 255.0) * s * 0.3;
@@ -1796,7 +1796,7 @@ fn svg_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Strin
     }
 
     // Sun/moon
-    let sun_present = hash[7] % 3 != 0;
+    let sun_present = !hash[7].is_multiple_of(3);
     if sun_present {
         let sun_x = s * 0.2 + (hash[8] as f64 / 255.0) * s * 0.6;
         let sun_y = s * 0.15 + (hash[9] as f64 / 255.0) * s * 0.3;
