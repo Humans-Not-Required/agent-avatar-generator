@@ -50,8 +50,9 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - `?theme=warm` query param on generate, batch, and gallery_zip endpoints
   - HSL color remapping with intelligent background/foreground detection
   - Configurable rate limit via RATE_LIMIT_MAX env var
-- **Tests:** 301 Rust (102 unit × 2 binaries + 97 HTTP integration)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. 138 integration tests.
+- **Performance:** Batch and gallery ZIP use parallel generation (rayon). X-Generation-Time-Ms timing header on all avatar endpoints. X-Avatar-Count header on ZIP responses. Batch response includes `generation_ms` and `count` fields.
+- **Tests:** 315 Rust (102 unit × 2 binaries + 111 HTTP integration)
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 160 integration tests.
 
 ### Tech Stack
 
@@ -65,7 +66,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 
 ### What's Next
 
-- Performance optimization for large batch requests
+- ~~Performance optimization for large batch requests~~ ✅ Done (rayon parallelization + timing headers)
 - Gallery: share gallery URL (gallery ZIP ✅ done)
 - ~~Color themes: user-specified palette/mood presets~~ ✅ Done (9 themes)
 - Additional robot antenna styles and eye glow effects
