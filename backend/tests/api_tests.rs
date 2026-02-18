@@ -1642,3 +1642,132 @@ fn test_batch_multiple_seeds_same_theme() {
         }
     }
 }
+
+// ---- Robot antenna expansion + eye glow integration tests ----
+
+#[test]
+fn test_robot_antenna_expansion_many_seeds_png() {
+    // With 6 antenna styles, exercising many seeds should cover all styles
+    let client = client();
+    let seeds: Vec<String> = (0..30).map(|i| format!("antenna-test-{i}")).collect();
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{seed}?style=robot&size=128");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {seed}");
+        assert_eq!(response.content_type().unwrap(), ContentType::PNG);
+        let bytes = response.into_bytes().unwrap();
+        assert!(bytes.len() > 100, "Robot PNG too small for seed: {seed}");
+    }
+}
+
+#[test]
+fn test_robot_antenna_expansion_many_seeds_svg() {
+    // Exercise SVG rendering for all antenna styles
+    let client = client();
+    let seeds: Vec<String> = (0..30).map(|i| format!("antenna-svg-{i}")).collect();
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{seed}?style=robot&size=128&format=svg");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {seed}");
+        let body = response.into_string().unwrap();
+        assert!(body.contains("<svg"), "No SVG tag for seed: {seed}");
+        assert!(body.contains("</svg>"), "Unclosed SVG for seed: {seed}");
+    }
+}
+
+#[test]
+fn test_robot_eye_glow_many_seeds_png() {
+    // Eye glow should render without panic across many seeds
+    let client = client();
+    let seeds: Vec<String> = (0..20).map(|i| format!("glow-test-{i}")).collect();
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{seed}?style=robot&size=128");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {seed}");
+        let bytes = response.into_bytes().unwrap();
+        assert!(bytes.len() > 100, "Robot PNG too small for seed: {seed}");
+    }
+}
+
+#[test]
+fn test_robot_eye_glow_many_seeds_svg() {
+    // Eye glow SVG circles should render without error
+    let client = client();
+    let seeds: Vec<String> = (0..20).map(|i| format!("glow-svg-{i}")).collect();
+    for seed in &seeds {
+        let url = format!("/api/v1/avatar/{seed}?style=robot&size=128&format=svg");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for seed: {seed}");
+        let body = response.into_string().unwrap();
+        assert!(body.contains("<svg"), "No SVG tag for seed: {seed}");
+    }
+}
+
+#[test]
+fn test_robot_antenna_glow_batch() {
+    // Batch robot avatars should work with new antenna + glow features
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/batch")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["ant-0","ant-1","ant-2","ant-3","ant-4","ant-5","ant-6","ant-7","ant-8","ant-9"], "style": "robot", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body: serde_json::Value = response.into_json().unwrap();
+    let avatars = body["avatars"].as_array().unwrap();
+    assert_eq!(avatars.len(), 10);
+    for avatar in avatars {
+        assert!(!avatar["data"].as_str().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn test_robot_antenna_glow_gallery_zip() {
+    // Gallery ZIP should work with expanded robot features
+    let client = client();
+    let response = client
+        .post("/api/v1/avatar/gallery/zip")
+        .header(ContentType::JSON)
+        .body(r#"{"seeds": ["gallery-ant-1", "gallery-ant-2", "gallery-ant-3"], "style": "robot", "size": 64}"#)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type().unwrap().to_string(), "application/zip");
+    let bytes = response.into_bytes().unwrap();
+    assert!(bytes.len() > 100, "ZIP should have content");
+}
+
+#[test]
+fn test_robot_themed_with_glow_and_antenna() {
+    // Themes should apply correctly on top of glow + antenna features
+    let client = client();
+    for theme in &["warm", "cool", "neon", "pastel"] {
+        let url = format!("/api/v1/avatar/themed-robot-test?style=robot&size=128&theme={theme}");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for theme: {theme}");
+        let bytes = response.into_bytes().unwrap();
+        assert!(bytes.len() > 100, "Robot PNG too small for theme: {theme}");
+    }
+}
+
+#[test]
+fn test_robot_themed_svg_with_glow() {
+    // Theme + glow SVG should render properly
+    let client = client();
+    for theme in &["ocean", "forest", "monochrome"] {
+        let url = format!("/api/v1/avatar/themed-glow-robot?style=robot&size=128&format=svg&theme={theme}");
+        let response = client.get(&url).dispatch();
+        assert_eq!(response.status(), Status::Ok, "Failed for theme: {theme}");
+        let body = response.into_string().unwrap();
+        assert!(body.contains("<svg"), "No SVG for theme: {theme}");
+    }
+}
+
+#[test]
+fn test_robot_compare_mode_new_features() {
+    // Share URL with robot style should work with new features
+    let client = client();
+    let response = client.get("/avatar/view/compare-robot?style=robot&size=256").dispatch();
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_string().unwrap();
+    assert!(body.contains("robot"));
+}

@@ -681,6 +681,121 @@ class TestRobotHeadShapes(unittest.TestCase):
         self.assertEqual(svg1, svg2)
 
 
+class TestRobotAntennaExpansion(unittest.TestCase):
+    """Tests for expanded robot antenna styles (6 types) and eye glow effects."""
+
+    def setUp(self):
+        self.client = AvatarService()
+
+    def test_robot_antenna_variety_png(self):
+        """30 different seeds should exercise multiple antenna styles."""
+        imgs = set()
+        for i in range(30):
+            data = self.client.generate(f"antenna-py-{i}", style="robot", size=64)
+            self.assertTrue(len(data) > 50)
+            imgs.add(data)
+        self.assertGreater(len(imgs), 20, "30 seeds should produce mostly unique robot avatars")
+
+    def test_robot_antenna_variety_svg(self):
+        """30 different seeds should exercise multiple SVG antenna styles."""
+        svgs = set()
+        for i in range(30):
+            svg = self.client.generate_svg(f"antenna-svg-py-{i}", style="robot", size=64)
+            self.assertIn("<svg", svg)
+            svgs.add(svg)
+        self.assertGreater(len(svgs), 20, "30 seeds should produce mostly unique robot SVGs")
+
+    def test_robot_antenna_deterministic(self):
+        """Each antenna seed produces identical output on re-request."""
+        for i in range(6):
+            seed = f"antenna-det-{i}"
+            img1 = self.client.generate(seed, style="robot", size=128)
+            img2 = self.client.generate(seed, style="robot", size=128)
+            self.assertEqual(img1, img2, f"Seed {seed} not deterministic")
+
+    def test_robot_antenna_svg_deterministic(self):
+        """Each antenna SVG seed produces identical output."""
+        for i in range(6):
+            seed = f"antenna-svg-det-{i}"
+            svg1 = self.client.generate_svg(seed, style="robot", size=128)
+            svg2 = self.client.generate_svg(seed, style="robot", size=128)
+            self.assertEqual(svg1, svg2, f"SVG seed {seed} not deterministic")
+
+    def test_robot_antenna_small_size(self):
+        """New antenna styles work at minimum size."""
+        for i in range(10):
+            data = self.client.generate(f"antenna-small-{i}", style="robot", size=16)
+            self.assertTrue(len(data) > 30)
+
+    def test_robot_antenna_large_size(self):
+        """New antenna styles work at large size."""
+        for i in range(6):
+            data = self.client.generate(f"antenna-large-{i}", style="robot", size=512)
+            self.assertTrue(len(data) > 1000)
+
+    def test_robot_glow_variety_png(self):
+        """Eye glow should produce variety across 20 seeds."""
+        imgs = set()
+        for i in range(20):
+            data = self.client.generate(f"glow-py-{i}", style="robot", size=64)
+            self.assertTrue(len(data) > 50)
+            imgs.add(data)
+        self.assertGreater(len(imgs), 15, "20 seeds should produce mostly unique glow variations")
+
+    def test_robot_glow_svg_has_opacity(self):
+        """At least some robot SVGs should contain opacity (from glow circles)."""
+        found_opacity = False
+        for i in range(20):
+            svg = self.client.generate_svg(f"glow-opacity-{i}", style="robot", size=128)
+            if 'opacity=' in svg:
+                found_opacity = True
+                break
+        self.assertTrue(found_opacity, "Expected at least one SVG with opacity from eye glow")
+
+    def test_robot_glow_batch(self):
+        """Batch robot with glow works."""
+        seeds = [f"glow-batch-{i}" for i in range(10)]
+        result = self.client.batch(seeds, style="robot", size=64)
+        self.assertEqual(len(result), 10)
+        for item in result:
+            self.assertTrue(len(item["data"]) > 10)
+
+    def test_robot_themed_with_glow(self):
+        """Themes apply on top of glow without errors."""
+        themes = ["warm", "cool", "neon", "pastel", "ocean"]
+        for theme in themes:
+            data = self.client.generate("themed-glow-robot", style="robot", size=128, theme=theme)
+            self.assertTrue(len(data) > 100, f"Failed for theme {theme}")
+
+    def test_robot_themed_svg_with_glow(self):
+        """SVG themes apply on top of glow without errors."""
+        themes = ["forest", "monochrome", "earth"]
+        for theme in themes:
+            svg = self.client.generate_svg("themed-glow-svg-robot", style="robot", size=128, theme=theme)
+            self.assertIn("<svg", svg, f"Failed for theme {theme}")
+
+    def test_robot_antenna_bg_override(self):
+        """New antenna styles work with background override."""
+        normal = self.client.generate("antenna-bg-test", style="robot", size=128)
+        override = self.client.generate("antenna-bg-test", style="robot", size=128, background="ff0000")
+        self.assertNotEqual(normal, override)
+
+    def test_robot_antenna_gallery_zip(self):
+        """Gallery ZIP with robot style works with expanded features."""
+        import io, zipfile
+        seeds = ["ant-zip-1", "ant-zip-2", "ant-zip-3"]
+        data = self.client.gallery_zip(seeds, style="robot", size=64)
+        self.assertTrue(len(data) > 100)
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        self.assertEqual(len(zf.namelist()), 3)
+
+    def test_robot_antenna_timed(self):
+        """Timed generation works with new antenna styles."""
+        data, ms = self.client.generate_timed("antenna-timed", style="robot", size=128)
+        self.assertTrue(len(data) > 100)
+        self.assertGreater(ms, 0)
+
+
 class TestGalleryZip(unittest.TestCase):
     """Tests for gallery ZIP download."""
 

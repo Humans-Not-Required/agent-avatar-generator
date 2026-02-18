@@ -14,7 +14,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - **9 Avatar Styles:**
   - `geometric` — 5×5 vertically symmetric grid identicon (default)
   - `rings` — Concentric colored rings
-  - `robot` — Procedural robot faces with 4 head shapes (square, dome, hexagonal, trapezoid), antennas, ears, visor, forehead marking, cheek bolts, mouth, chin plate, collar (4 styles), shoulder pads (3 styles), chest emblem (4 styles) — 20,000+ unique combos
+  - `robot` — Procedural robot faces with 4 head shapes (square, dome, hexagonal, trapezoid), 6 antenna styles (straight, V, T, lightning bolt, satellite dish, coil/spring), eye glow effects (none/subtle/bright), ears, visor, forehead marking, cheek bolts, mouth, chin plate, collar (4 styles), shoulder pads (3 styles), chest emblem (4 styles) — 50,000+ unique combos
   - `blockies` — 8×8 Ethereum-style colored grid
   - `gradient` — Two-color gradient with geometric overlay shape
   - `initials` — 1-2 letter initials on colored background (embedded 5×7 bitmap font for PNG, native text for SVG)
@@ -57,8 +57,8 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - All styles: style × theme matrix (10 styles × 10 themes = 100 avatars)
   - Shareable comparison URLs (?mode=compare&seed=X&style=Y)
   - Theme selector added to Gallery mode
-- **Tests:** 324 Rust (102 unit × 2 binaries + 120 HTTP integration)
-- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 164 integration tests.
+- **Tests:** 375 Rust (123 unit × 2 binaries + 129 HTTP integration)
+- ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 178 integration tests.
 
 ### Tech Stack
 
@@ -76,7 +76,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - ~~Gallery: share gallery URL~~ ✅ Done (URL params encode seeds, style, size, theme)
 - ~~Color themes: user-specified palette/mood presets~~ ✅ Done (9 themes)
 - ~~Comparison mode: side-by-side before/after theme comparison~~ ✅ Done (Compare mode UI)
-- Additional robot antenna styles and eye glow effects
+- ~~Additional robot antenna styles and eye glow effects~~ ✅ Done (6 antenna styles + 3 glow levels)
 - Animated avatar support (GIF/APNG)
 
 ### ⚠️ Gotchas

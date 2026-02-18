@@ -358,7 +358,7 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     }
 
     // Antenna (varies based on hash)
-    let antenna_style = hash[6] % 3;
+    let antenna_style = hash[6] % 6;
     let antenna_x = size / 2;
     let antenna_top = (s * 0.05) as u32;
     let antenna_base = head_top;
@@ -374,11 +374,68 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
             fill_rect(&mut img, antenna_x - spread, antenna_top, antenna_x - spread + 2, antenna_base, body_color);
             fill_rect(&mut img, antenna_x + spread - 1, antenna_top, antenna_x + spread + 2, antenna_base, body_color);
         }
-        _ => {
+        2 => {
             // T antenna
             fill_rect(&mut img, antenna_x - 1, antenna_top + 3, antenna_x + 2, antenna_base, body_color);
             let bar_w = (s * 0.1) as u32;
             fill_rect(&mut img, antenna_x - bar_w, antenna_top, antenna_x + bar_w, antenna_top + 3, eye_color);
+        }
+        3 => {
+            // Lightning bolt antenna
+            let bolt_w = (s * 0.03) as u32;
+            let mid_y = (antenna_top + antenna_base) / 2;
+            let zag = (s * 0.04) as u32;
+            // Upper segment (left-leaning)
+            fill_rect(&mut img, antenna_x - zag - 1, antenna_top, antenna_x - zag + 2, mid_y, body_color);
+            // Lower segment (right-leaning)
+            fill_rect(&mut img, antenna_x + zag - 1, mid_y, antenna_x + zag + 2, antenna_base, body_color);
+            // Connecting horizontal bar
+            fill_rect(&mut img, antenna_x - zag, mid_y - 1, antenna_x + zag + 2, mid_y + 1, body_color);
+            // Tip spark
+            fill_circle(&mut img, antenna_x - zag, antenna_top, bolt_w, eye_color);
+        }
+        4 => {
+            // Satellite dish antenna
+            let pole_top = antenna_top + (s * 0.06) as u32;
+            // Pole
+            fill_rect(&mut img, antenna_x - 1, pole_top, antenna_x + 2, antenna_base, body_color);
+            // Dish (arc approximated with half-circle)
+            let dish_r = (s * 0.07) as u32;
+            let dish_cy = pole_top;
+            for y in (dish_cy.saturating_sub(dish_r))..dish_cy {
+                let dy = dish_cy as f64 - y as f64;
+                let half_w = ((dish_r as f64).powi(2) - dy.powi(2)).sqrt();
+                let x_start = (antenna_x as f64 - half_w).max(0.0) as u32;
+                let x_end = (antenna_x as f64 + half_w).min(s - 1.0) as u32;
+                for x in x_start..=x_end {
+                    img.put_pixel(x, y, Rgba([accent_color.0, accent_color.1, accent_color.2, 255]));
+                }
+            }
+            // Receiver dot in dish center
+            fill_circle(&mut img, antenna_x, dish_cy.saturating_sub(dish_r / 2), (s * 0.015) as u32, eye_color);
+        }
+        _ => {
+            // Coil/spring antenna
+            let coil_count = 4u32;
+            let segment_h = (antenna_base - antenna_top) / coil_count;
+            let coil_w = (s * 0.04) as u32;
+            for i in 0..coil_count {
+                let seg_top = antenna_top + i * segment_h;
+                let seg_mid = seg_top + segment_h / 2;
+                if i % 2 == 0 {
+                    // Lean right
+                    fill_rect(&mut img, antenna_x, seg_top, antenna_x + coil_w, seg_top + 2, body_color);
+                    fill_rect(&mut img, antenna_x + coil_w - 2, seg_top, antenna_x + coil_w, seg_mid, body_color);
+                    fill_rect(&mut img, antenna_x, seg_mid - 1, antenna_x + coil_w, seg_mid + 1, body_color);
+                } else {
+                    // Lean left
+                    fill_rect(&mut img, antenna_x - coil_w, seg_top, antenna_x, seg_top + 2, body_color);
+                    fill_rect(&mut img, antenna_x - coil_w, seg_top, antenna_x - coil_w + 2, seg_mid, body_color);
+                    fill_rect(&mut img, antenna_x - coil_w, seg_mid - 1, antenna_x, seg_mid + 1, body_color);
+                }
+            }
+            // Top ball
+            fill_circle(&mut img, antenna_x, antenna_top, (s * 0.025) as u32, eye_color);
         }
     }
 
@@ -431,6 +488,23 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     let eye_shape = hash[7] % 3;
     let left_eye_x = (s * 0.35) as u32;
     let right_eye_x = (s * 0.65) as u32;
+
+    // Eye glow effect (drawn BEFORE eyes so glow appears behind)
+    let glow_style = hash[21] % 3;
+    if glow_style > 0 {
+        let glow_rings = if glow_style == 1 { 2u32 } else { 3u32 };
+        let glow_base_r = eye_size + (s * 0.02) as u32;
+        for ring in 0..glow_rings {
+            let r = glow_base_r + ring * (s * 0.02) as u32;
+            let alpha = if glow_style == 1 {
+                60u8.saturating_sub((ring as u8).saturating_mul(25))
+            } else {
+                90u8.saturating_sub((ring as u8).saturating_mul(25))
+            };
+            draw_glow_circle(&mut img, left_eye_x, eye_y, r, eye_color, alpha);
+            draw_glow_circle(&mut img, right_eye_x, eye_y, r, eye_color, alpha);
+        }
+    }
 
     match eye_shape {
         0 => {
@@ -1215,6 +1289,32 @@ fn fill_circle(img: &mut RgbaImage, cx: u32, cy: u32, radius: u32, color: (u8, u
     }
 }
 
+/// Draw a semi-transparent glow circle with alpha blending.
+fn draw_glow_circle(img: &mut RgbaImage, cx: u32, cy: u32, radius: u32, color: (u8, u8, u8), alpha: u8) {
+    let r = radius as i64;
+    let cx_i = cx as i64;
+    let cy_i = cy as i64;
+    let a = alpha as f64 / 255.0;
+    for y in (cy_i - r)..=(cy_i + r) {
+        for x in (cx_i - r)..=(cx_i + r) {
+            if x >= 0 && y >= 0 && (x as u32) < img.width() && (y as u32) < img.height() {
+                let dx = x - cx_i;
+                let dy = y - cy_i;
+                if dx * dx + dy * dy <= r * r {
+                    let existing = img.get_pixel(x as u32, y as u32);
+                    let blended = Rgba([
+                        ((color.0 as f64 * a) + (existing[0] as f64 * (1.0 - a))) as u8,
+                        ((color.1 as f64 * a) + (existing[1] as f64 * (1.0 - a))) as u8,
+                        ((color.2 as f64 * a) + (existing[2] as f64 * (1.0 - a))) as u8,
+                        255,
+                    ]);
+                    img.put_pixel(x as u32, y as u32, blended);
+                }
+            }
+        }
+    }
+}
+
 /// Fill a convex polygon defined by vertices using scanline rasterization.
 fn fill_polygon(img: &mut RgbaImage, vertices: &[(f64, f64)], color: (u8, u8, u8)) {
     if vertices.is_empty() {
@@ -1450,7 +1550,7 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
     // Antenna
     let ax = size / 2;
     let at = (s * 0.05) as u32;
-    let antenna_style = hash[6] % 3;
+    let antenna_style = hash[6] % 6;
     match antenna_style {
         0 => {
             parts.push_str(&format!(
@@ -1474,7 +1574,7 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
                 ax + sp, ax + sp, hex_color(body_color)
             ));
         }
-        _ => {
+        2 => {
             parts.push_str(&format!(
                 r#"<line x1="{ax}" y1="{}" x2="{ax}" y2="{ht}" stroke="{}" stroke-width="3"/>"#,
                 at + 3, hex_color(body_color)
@@ -1483,6 +1583,75 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
             parts.push_str(&format!(
                 r#"<rect x="{}" y="{at}" width="{}" height="3" fill="{}"/>"#,
                 ax - bw, bw * 2, hex_color(eye_color)
+            ));
+        }
+        3 => {
+            // Lightning bolt antenna
+            let mid_y = (at + ht) / 2;
+            let zag = (s * 0.04) as u32;
+            let bolt_r = (s * 0.03) as u32;
+            parts.push_str(&format!(
+                r#"<polyline points="{},{} {},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="3" stroke-linejoin="round"/>"#,
+                ax as i32 - zag as i32, at,
+                ax as i32 - zag as i32, mid_y,
+                ax as i32 + zag as i32, mid_y,
+                ax as i32 + zag as i32, ht,
+                hex_color(body_color)
+            ));
+            parts.push_str(&format!(
+                r#"<circle cx="{}" cy="{at}" r="{bolt_r}" fill="{}"/>"#,
+                ax as i32 - zag as i32, hex_color(eye_color)
+            ));
+        }
+        4 => {
+            // Satellite dish antenna
+            let pole_top = at + (s * 0.06) as u32;
+            let dish_r = (s * 0.07) as u32;
+            // Pole
+            parts.push_str(&format!(
+                r#"<line x1="{ax}" y1="{pole_top}" x2="{ax}" y2="{ht}" stroke="{}" stroke-width="3"/>"#,
+                hex_color(body_color)
+            ));
+            // Dish (upper semicircle arc)
+            parts.push_str(&format!(
+                r#"<path d="M {},{} A {},{} 0 0 1 {},{}" fill="{}" stroke="{}" stroke-width="1"/>"#,
+                ax - dish_r, pole_top,
+                dish_r, dish_r,
+                ax + dish_r, pole_top,
+                hex_color(accent_color), hex_color(accent_color)
+            ));
+            // Receiver dot
+            let dot_r = (s * 0.015) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{ax}" cy="{}" r="{dot_r}" fill="{}"/>"#,
+                pole_top - dish_r / 2, hex_color(eye_color)
+            ));
+        }
+        _ => {
+            // Coil/spring antenna
+            let coil_count = 4u32;
+            let segment_h = (ht - at) / coil_count;
+            let coil_w = (s * 0.04) as u32;
+            let mut path_d = String::new();
+            for i in 0..coil_count {
+                let seg_top = at + i * segment_h;
+                let seg_mid = seg_top + segment_h / 2;
+                if i % 2 == 0 {
+                    path_d.push_str(&format!("M {},{} L {},{} L {},{} ", ax, seg_top, ax + coil_w, seg_top, ax + coil_w, seg_mid));
+                    path_d.push_str(&format!("L {},{} ", ax, seg_mid));
+                } else {
+                    path_d.push_str(&format!("M {},{} L {},{} L {},{} ", ax, seg_top, ax as i32 - coil_w as i32, seg_top, ax as i32 - coil_w as i32, seg_mid));
+                    path_d.push_str(&format!("L {},{} ", ax, seg_mid));
+                }
+            }
+            parts.push_str(&format!(
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="2"/>"#,
+                path_d.trim(), hex_color(body_color)
+            ));
+            let ball_r = (s * 0.025) as u32;
+            parts.push_str(&format!(
+                r#"<circle cx="{ax}" cy="{at}" r="{ball_r}" fill="{}"/>"#,
+                hex_color(eye_color)
             ));
         }
     }
@@ -1543,10 +1712,34 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
         }
     }
 
-    // Eyes
+    // Eye glow effect (drawn BEFORE eyes, uses SVG filter)
     let es = (s * 0.08) as u32;
     let le = (s * 0.35) as u32;
     let re = (s * 0.65) as u32;
+    let glow_style = hash[21] % 3;
+    if glow_style > 0 {
+        let glow_rings = if glow_style == 1 { 2u32 } else { 3u32 };
+        let glow_base_r = es + (s * 0.02) as u32;
+        for ring in 0..glow_rings {
+            let r = glow_base_r + ring * (s * 0.02) as u32;
+            let opacity = if glow_style == 1 {
+                0.24_f64 - ring as f64 * 0.1
+            } else {
+                0.35_f64 - ring as f64 * 0.1
+            };
+            let op = opacity.max(0.05);
+            parts.push_str(&format!(
+                r#"<circle cx="{le}" cy="{ey}" r="{r}" fill="{}" opacity="{:.2}"/>"#,
+                hex_color(eye_color), op
+            ));
+            parts.push_str(&format!(
+                r#"<circle cx="{re}" cy="{ey}" r="{r}" fill="{}" opacity="{:.2}"/>"#,
+                hex_color(eye_color), op
+            ));
+        }
+    }
+
+    // Eyes
     let eye_shape = hash[7] % 3;
     match eye_shape {
         0 => {
@@ -2814,5 +3007,202 @@ mod tests {
             }
         }
         panic!("Could not find seed for byte[{byte_idx}] % {modulo} == {target}");
+    }
+
+    // ---- Antenna style tests (6 styles) ----
+
+    #[test]
+    fn test_robot_lightning_antenna_png() {
+        let seed = find_seed_for_robot_feature(6, 6, 3);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_satellite_antenna_png() {
+        let seed = find_seed_for_robot_feature(6, 6, 4);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_coil_antenna_png() {
+        let seed = find_seed_for_robot_feature(6, 6, 5);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_lightning_antenna_svg() {
+        let seed = find_seed_for_robot_feature(6, 6, 3);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("polyline"), "Lightning antenna should use polyline");
+    }
+
+    #[test]
+    fn test_robot_satellite_antenna_svg() {
+        let seed = find_seed_for_robot_feature(6, 6, 4);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("path"), "Satellite antenna should use path for dish arc");
+    }
+
+    #[test]
+    fn test_robot_coil_antenna_svg() {
+        let seed = find_seed_for_robot_feature(6, 6, 5);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("path"), "Coil antenna should use path for spring shape");
+    }
+
+    #[test]
+    fn test_robot_all_antenna_styles_produce_different_output() {
+        let mut outputs = Vec::new();
+        for style in 0..6u8 {
+            let seed = find_seed_for_robot_feature(6, 6, style);
+            let img = generate_png(&seed, "robot", 128, None).unwrap();
+            outputs.push(img);
+        }
+        // Each antenna style should produce visually different output
+        for i in 0..outputs.len() {
+            for j in (i + 1)..outputs.len() {
+                assert_ne!(outputs[i], outputs[j], "Antenna styles {i} and {j} should differ");
+            }
+        }
+    }
+
+    #[test]
+    fn test_robot_antenna_deterministic() {
+        for style in 0..6u8 {
+            let seed = find_seed_for_robot_feature(6, 6, style);
+            let img1 = generate_png(&seed, "robot", 128, None).unwrap();
+            let img2 = generate_png(&seed, "robot", 128, None).unwrap();
+            assert_eq!(img1, img2, "Antenna style {style} should be deterministic");
+        }
+    }
+
+    #[test]
+    fn test_robot_antenna_various_sizes() {
+        for style in 3..6u8 {
+            let seed = find_seed_for_robot_feature(6, 6, style);
+            for size in [64, 128, 256, 512] {
+                let img = generate_png(&seed, "robot", size, None).unwrap();
+                assert!(!img.is_empty(), "Antenna style {style} at size {size} should render");
+            }
+        }
+    }
+
+    // ---- Eye glow tests ----
+
+    #[test]
+    fn test_robot_eye_glow_subtle_png() {
+        let seed = find_seed_for_robot_feature(21, 3, 1);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_eye_glow_bright_png() {
+        let seed = find_seed_for_robot_feature(21, 3, 2);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_eye_glow_none_png() {
+        let seed = find_seed_for_robot_feature(21, 3, 0);
+        let img = generate_png(&seed, "robot", 256, None).unwrap();
+        assert!(!img.is_empty());
+    }
+
+    #[test]
+    fn test_robot_eye_glow_subtle_svg() {
+        let seed = find_seed_for_robot_feature(21, 3, 1);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("opacity="), "Subtle glow should have opacity circles in SVG");
+    }
+
+    #[test]
+    fn test_robot_eye_glow_bright_svg() {
+        let seed = find_seed_for_robot_feature(21, 3, 2);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        assert!(svg.contains("opacity="), "Bright glow should have opacity circles in SVG");
+    }
+
+    #[test]
+    fn test_robot_eye_glow_none_svg() {
+        let seed = find_seed_for_robot_feature(21, 3, 0);
+        let svg = generate_svg(&seed, "robot", 256, None).unwrap();
+        // No glow circles should be present (no opacity attribute from glow)
+        // But other elements might have opacity from themes, so just verify it renders
+        assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_robot_glow_vs_no_glow_differ() {
+        let glow_seed = find_seed_for_robot_feature(21, 3, 2);
+        let no_glow_seed = find_seed_for_robot_feature(21, 3, 0);
+        let with_glow = generate_png(&glow_seed, "robot", 128, None).unwrap();
+        let without_glow = generate_png(&no_glow_seed, "robot", 128, None).unwrap();
+        assert_ne!(with_glow, without_glow, "Glow and no-glow should produce different output");
+    }
+
+    #[test]
+    fn test_robot_glow_deterministic() {
+        for glow in 0..3u8 {
+            let seed = find_seed_for_robot_feature(21, 3, glow);
+            let img1 = generate_png(&seed, "robot", 128, None).unwrap();
+            let img2 = generate_png(&seed, "robot", 128, None).unwrap();
+            assert_eq!(img1, img2, "Glow style {glow} should be deterministic");
+        }
+    }
+
+    #[test]
+    fn test_robot_glow_various_sizes() {
+        for glow in 1..3u8 {
+            let seed = find_seed_for_robot_feature(21, 3, glow);
+            for size in [64, 128, 256] {
+                let img = generate_png(&seed, "robot", size, None).unwrap();
+                assert!(!img.is_empty(), "Glow style {glow} at size {size} should render");
+            }
+        }
+    }
+
+    #[test]
+    fn test_draw_glow_circle_alpha_blending() {
+        let mut img: RgbaImage = ImageBuffer::new(100, 100);
+        // Fill with white
+        for pixel in img.pixels_mut() {
+            *pixel = Rgba([255, 255, 255, 255]);
+        }
+        // Draw red glow at center with 50% alpha
+        draw_glow_circle(&mut img, 50, 50, 10, (255, 0, 0), 128);
+        // Center pixel should be blended (reddish, not pure red or white)
+        let px = img.get_pixel(50, 50);
+        assert!(px[0] > 200, "Red channel should be high");
+        assert!(px[1] < 200, "Green channel should be reduced");
+        assert!(px[1] > 50, "Green channel should still have some white blend");
+    }
+
+    #[test]
+    fn test_draw_glow_circle_zero_alpha() {
+        let mut img: RgbaImage = ImageBuffer::new(100, 100);
+        for pixel in img.pixels_mut() {
+            *pixel = Rgba([100, 100, 100, 255]);
+        }
+        let before = *img.get_pixel(50, 50);
+        draw_glow_circle(&mut img, 50, 50, 5, (255, 0, 0), 0);
+        let after = *img.get_pixel(50, 50);
+        assert_eq!(before, after, "Zero alpha glow should not change image");
+    }
+
+    #[test]
+    fn test_draw_glow_circle_full_alpha() {
+        let mut img: RgbaImage = ImageBuffer::new(100, 100);
+        for pixel in img.pixels_mut() {
+            *pixel = Rgba([0, 0, 0, 255]);
+        }
+        draw_glow_circle(&mut img, 50, 50, 5, (255, 0, 0), 255);
+        let px = img.get_pixel(50, 50);
+        assert_eq!(px[0], 255, "Full alpha glow should be pure color");
+        assert_eq!(px[1], 0);
     }
 }

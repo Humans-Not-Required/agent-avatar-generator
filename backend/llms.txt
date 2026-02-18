@@ -50,7 +50,7 @@ GET /api/v1/health
 ## Styles
 - geometric: 5×5 grid with vertical symmetry (default)
 - rings: Concentric colored rings
-- robot: Procedural robot faces with 4 head shapes, collars, shoulder pads, emblems
+- robot: Procedural robot faces with 4 head shapes, 6 antenna styles (straight, V, T, lightning, satellite, coil), eye glow effects, collars, shoulder pads, emblems
 - blockies: 8×8 colored grid (Ethereum-style)
 - gradient: Two-color gradient with geometric overlay
 - initials: 1-2 letter initials on colored background
