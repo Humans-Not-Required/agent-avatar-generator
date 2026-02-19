@@ -88,38 +88,17 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - ~~Additional robot antenna styles and eye glow effects~~ ✅ Done (6 antenna styles + 3 glow levels)
 - ~~Animated avatar support (GIF/APNG)~~ ✅ Done (GIF with per-style animations)
 
-### 🎨 Color Palette Improvement — Proposal (awaiting Jordan decision)
+### ✅ Color Palette Improvement — SHIPPED (2026-02-19)
 
-**Problem:** `color_from_hash()` maps raw hash bytes directly to RGB. When R/G/B bytes land close together in value, you get muddy grays and browns. Jordan flagged this 2026-02-19.
+**Fix:** Replaced raw RGB hash-byte extraction with HSL color space in both `color_from_hash()` and `bg_color_from_hash()`. Commit: `eca282c`.
 
-**Root cause confirmed:** The function clamps to range 40-220 but does nothing about *saturation*. Two hash bytes at 120 and 118 → muddy gray, regardless of clamping.
+- `color_from_hash`: hue from 2 hash bytes (full 0-360° coverage), saturation 0.60-0.85, lightness 0.40-0.60. All 9 styles now produce vivid, non-muddy colors.
+- `bg_color_from_hash`: HSL pastel (saturation 0.20-0.40, lightness 0.82-0.94). Real hue tint instead of muddy gray-beige.
+- `harmonious_palette()` (mosaic/sunset) was already HSL-based — untouched.
 
-**What already works well:** `harmonious_palette()` (used by mosaic) picks a hue from hash, then applies a color harmony model (complementary/triadic/analogous). These avatars always look clean.
+**Jordan feedback addressed.** If further improvement wanted (per-avatar color harmony — Option B in the proposal), that's a follow-up session.
 
-**The fix — 3 options:**
-
-**Option A — HSL color_from_hash (1 function, drop-in)** ← *recommended quick fix*
-- Replace raw-RGB extraction with HSL: hue from 2 hash bytes, saturation locked 0.60-0.85, lightness 0.40-0.60
-- All 9 styles get vivid, non-muddy colors immediately — no per-style changes
-- Colors within a single avatar may be unrelated in hue (different styles pick independent hash offsets)
-- ~10 lines of code change
-
-**Option B — Avatar palette (best quality, bigger change)**
-- Generate a single `AvatarPalette { primary, secondary, accent, highlight, background }` per seed using `harmonious_palette()` logic
-- Update each style to pick from the palette by role (e.g., robot: body=primary, eyes=accent, visor=secondary)
-- Colors within each avatar are harmonically related (analogous/triadic/etc.)
-- Best visual result — avatars feel "designed," not random
-- ~50-100 lines across 9 styles + new palette struct
-
-**Option C — Hue-shifted analogous (drop-in, middle ground)**
-- `color_from_hash` uses the same base hue as `harmonious_palette` but shifts by 30° per `offset/3`
-- All colors within an avatar share a base hue — automatically analogous
-- Drop-in like A, harmony like B (but only analogous, not complementary/triadic)
-- ~15 lines of code change
-
-**Recommendation:** Option A for speed (vivid today, no breakage), Option B for quality (worth 1-2 extra sessions, best demo impact). Option C is a good middle ground if neither extreme fits.
-
-**Waiting on:** Jordan's preference before implementing. Any option can be done in <1 session.
+**Next possible improvement (Option B):** Generate an `AvatarPalette { primary, secondary, accent, background }` per seed so colors *within* a single avatar are harmonically related (analogous/triadic). Currently body/eye/accent colors in e.g. robot are vivid but may be unrelated hues. Option B would make them feel "designed."
 
 ### ⚠️ Gotchas
 
