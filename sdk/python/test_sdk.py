@@ -573,6 +573,96 @@ class TestSunsetStyle(unittest.TestCase):
             self.assertTrue(len(data) > 100)
 
 
+
+class TestConstellationStyle(unittest.TestCase):
+    """Tests for the constellation (network graph) avatar style."""
+
+    @classmethod
+    def setUpClass(cls):
+        url = os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")
+        cls.client = AvatarService(url)
+
+    def test_constellation_png(self):
+        """Constellation style produces valid PNG bytes."""
+        data = self.client.generate_png("nanook", style="constellation")
+        self.assertTrue(data[:4] == b'\x89PNG', "Should be a valid PNG")
+        self.assertGreater(len(data), 500)
+
+    def test_constellation_svg(self):
+        """Constellation SVG contains node and edge elements."""
+        svg = self.client.generate_svg("nanook", style="constellation")
+        self.assertIn("<svg", svg)
+        self.assertIn("<circle", svg, "Should have node circles")
+        self.assertIn("<line", svg, "Should have edge lines")
+
+    def test_constellation_deterministic(self):
+        """Same seed always produces identical output."""
+        a = self.client.generate("agent-42", style="constellation", size=128)
+        b = self.client.generate("agent-42", style="constellation", size=128)
+        self.assertEqual(a, b, "Constellation must be deterministic")
+
+    def test_constellation_different_seeds(self):
+        """Different seeds produce different avatars."""
+        a = self.client.generate("alpha-node", style="constellation", size=128)
+        b = self.client.generate("beta-node", style="constellation", size=128)
+        self.assertNotEqual(a, b, "Different seeds should differ")
+
+    def test_constellation_multiple_sizes(self):
+        """Constellation renders at all valid sizes."""
+        for sz in [16, 64, 128, 256, 512]:
+            data = self.client.generate("size-test", style="constellation", size=sz)
+            self.assertIsNotNone(data)
+            self.assertGreater(len(data), 0)
+
+    def test_constellation_with_background(self):
+        """Background color override works."""
+        dark = self.client.generate("bg-test", style="constellation", background="0a0a1a")
+        light = self.client.generate("bg-test", style="constellation", background="f0f0ff")
+        self.assertIsNotNone(dark)
+        self.assertIsNotNone(light)
+        self.assertNotEqual(dark, light, "Different backgrounds should differ")
+
+    def test_constellation_batch(self):
+        """Batch generation works for constellation."""
+        seeds = ["node-a", "node-b", "node-c", "hub-1"]
+        results = self.client.batch(seeds, style="constellation", size=64)
+        self.assertEqual(len(results), 4)
+        for item in results:
+            self.assertIn("seed", item)
+            self.assertIn("data", item)
+            self.assertGreater(len(item["data"]), 100)
+
+    def test_constellation_gif(self):
+        """Constellation GIF animation works (pulse fallback)."""
+        data = self.client.generate_gif("pulse-test", style="constellation", size=64)
+        # GIF magic bytes: GIF89a
+        self.assertTrue(data[:3] == b'GIF', "Should be a valid GIF")
+
+    def test_constellation_save_png(self):
+        """Save constellation avatar to file."""
+        path = "/tmp/test_constellation.png"
+        self.client.save("save-test", path, style="constellation")
+        self.assertTrue(os.path.exists(path))
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(4), b'\x89PNG')
+        os.unlink(path)
+
+    def test_constellation_in_gallery_zip(self):
+        """Constellation style included in gallery ZIP."""
+        import zipfile, io
+        data = self.client.gallery_zip(["net-agent"], style="constellation", size=64)
+        z = zipfile.ZipFile(io.BytesIO(data))
+        names = z.namelist()
+        self.assertEqual(len(names), 1)
+        self.assertIn("constellation", names[0])
+
+    def test_constellation_svg_hub_glow(self):
+        """SVG hub node has glow circle (opacity < 1 circle element)."""
+        svg = self.client.generate_svg("hub-glow-test", style="constellation", size=256)
+        # Hub glow is rendered as a circle with opacity="0.25"
+        self.assertIn('opacity="0.25"', svg, "Hub glow circle should be present")
+
+
 class TestConstructor(unittest.TestCase):
     def test_default_url(self):
         client = AvatarService()
