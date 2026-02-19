@@ -15,6 +15,11 @@ pub fn hash_seed(seed: &str) -> [u8; 32] {
 /// Uses HSL color space to guarantee high saturation (no muddy grays/browns).
 /// Hue derived from 2 bytes for full 0-360° distribution.
 /// Saturation: 0.60-0.85 (always vivid). Lightness: 0.40-0.60 (always readable).
+///
+/// Note: Production style generators use `avatar_palette()` for harmonically-related
+/// colors. This function is retained as a public utility for callers needing a single
+/// deterministic vivid color from an arbitrary hash offset.
+#[allow(dead_code)]
 pub fn color_from_hash(hash: &[u8; 32], offset: usize) -> (u8, u8, u8) {
     let h0 = hash[offset % 32] as f64;
     let h1 = hash[(offset + 1) % 32] as f64;
