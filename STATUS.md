@@ -100,6 +100,8 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 
 **Option B also shipped (2026-02-19, commit a7316e0):** `AvatarPalette` struct + `avatar_palette()` function. All 9 styles now derive colors from a single harmonically-related palette per seed. Robot body/eye/accent are complementary or triadic — feel designed. Rings cycle through a cohesive palette. Pixel creatures have palette-matched tri-color schemes. Colors within each avatar now share a harmonic relationship (complementary | triadic | analogous | split-complementary, deterministic from hash).
 
+**GIF animation consistency fix (2026-02-19, commit c695ee6):** animation.rs updated to use `avatar_palette()`. Animated GIF frame 0 now matches static PNG/SVG exactly — no more color mismatch between static and animated outputs. Pixel animation retains color-cycling effect but starts from palette base colors.
+
 ### ⚠️ Gotchas
 
 - `cargo` not on PATH by default — use `export PATH="$HOME/.cargo/bin:$PATH"`
