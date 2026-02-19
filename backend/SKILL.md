@@ -15,7 +15,7 @@ GET /api/v1/avatar/{seed}?style=geometric&size=256&format=png
 
 **Parameters:**
 - `seed` (path, required): Any string — agent ID, email, name, UUID
-- `style` (query): `geometric` | `rings` | `robot` | `blockies` | `gradient` | `initials` | `starburst` | `mosaic` | `pixel` | `sunset` (default: `geometric`)
+- `style` (query): `geometric` | `rings` | `robot` | `blockies` | `gradient` | `initials` | `starburst` | `mosaic` | `pixel` | `sunset` | `constellation` (default: `geometric`)
 - `size` (query): 16–1024 pixels (default: 256)
 - `format` (query): `png` | `svg` | `gif` (default: `png`)
 - `background` (query): Hex color override (e.g., `ff0000`)
@@ -37,6 +37,7 @@ Each style has a unique animation:
 - `gradient` — angle rotation
 - `pixel` — color cycling
 - `sunset` — sun movement + color shift
+- `constellation` — node pulse
 - Others — brightness pulse
 
 **Response headers:** `X-Frame-Count`, `X-Generation-Time-Ms`
@@ -94,6 +95,7 @@ GET /api/v1/health
 | `mosaic` | 6×6 grid of shapes with harmonious colors | Brightness pulse |
 | `pixel` | Retro pixel art creatures (space-invader style) | Color cycling |
 | `sunset` | Layered horizon bands with harmonious colors and sun glow | Sun movement + color shift |
+| `constellation` | Network graph — 7-14 nodes connected by edges, hub-and-spoke topology | Node pulse |
 
 ## Color Themes
 

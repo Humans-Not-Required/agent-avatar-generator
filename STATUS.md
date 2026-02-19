@@ -1,6 +1,6 @@
 # Agent Avatar Generator - Status
 
-## Current State: 10 Styles, 9 Color Themes, Animated GIF, Gallery ZIP ✅
+## Current State: 11 Styles, 9 Color Themes, Animated GIF, Gallery ZIP ✅
 
 Self-hosted deterministic avatar generation service with 11 styles, 9 color themes, PNG/SVG/GIF output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
@@ -11,7 +11,7 @@ Self-hosted deterministic avatar generation service with 11 styles, 9 color them
   - `GET /api/v1/styles` — List all available styles
   - `POST /api/v1/avatar/batch` — Batch generate up to 50 avatars
   - `GET /avatar/view/{seed}` — Share URL with preview page
-- **9 Avatar Styles:**
+- **11 Avatar Styles:**
   - `geometric` — 5×5 vertically symmetric grid identicon (default)
   - `rings` — Concentric colored rings
   - `robot` — Procedural robot faces with 4 head shapes (square, dome, hexagonal, trapezoid), 6 antenna styles (straight, V, T, lightning bolt, satellite dish, coil/spring), eye glow effects (none/subtle/bright), ears, visor, forehead marking, cheek bolts, mouth, chin plate, collar (4 styles), shoulder pads (3 styles), chest emblem (4 styles) — 50,000+ unique combos
@@ -22,6 +22,7 @@ Self-hosted deterministic avatar generation service with 11 styles, 9 color them
   - `mosaic` — 6×6 grid of geometric shapes with harmonious color palettes (complementary/triadic/analogous/split-complementary)
   - `pixel` — Retro pixel art creatures with horizontal symmetry, 11×11 grid, 3-color palette, visible pixel gaps (space-invader inspired)
   - `sunset` — Layered horizon bands using harmonious color palette, wavy edges between bands, optional sun with glow effect
+  - `constellation` — Network graph avatar with 7-14 nodes connected by edges, hub-and-spoke topology with distinct hub node. Ideal for agent and network identities.
 - **Output Formats:** PNG + SVG + animated GIF for all styles
 - **Deterministic:** Same seed → identical output, always. SHA-256 hashing.
 - **Rate Limiting:** 200 req/min per IP with headers

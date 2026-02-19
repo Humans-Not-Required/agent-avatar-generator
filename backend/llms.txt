@@ -16,7 +16,7 @@ Generate with style: GET /api/v1/avatar/{seed}?style=robot&size=256
 
 ### Generate Avatar
 GET /api/v1/avatar/{seed}
-- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst|mosaic|pixel|sunset), size (16-1024), format (png|svg|gif), background (hex), theme (warm|cool|ocean|forest|sunset|neon|pastel|monochrome|earth)
+- Query: style (geometric|rings|robot|blockies|gradient|initials|starburst|mosaic|pixel|sunset|constellation), size (16-1024), format (png|svg|gif), background (hex), theme (warm|cool|ocean|forest|sunset|neon|pastel|monochrome|earth)
 - GIF params: frames (2-30, default 10), delay (1-100 centiseconds, default 8 = 80ms/frame)
 - Returns: image/png, image/svg+xml, or image/gif
 - GIF responses include X-Frame-Count header
@@ -65,6 +65,7 @@ Each style has a unique animation when rendered as GIF:
 - mosaic: 6×6 grid of shapes with harmonious colors — brightness pulse
 - pixel: Retro pixel art creatures with horizontal symmetry — color cycling
 - sunset: Layered horizon bands with sun glow — sun movement + color shift
+- constellation: Network graph — 7-14 nodes connected by edges, hub-and-spoke topology — node pulse
 
 ## Color Themes
 Apply a color theme to any style:
