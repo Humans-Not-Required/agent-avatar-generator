@@ -102,6 +102,11 @@ Self-hosted deterministic avatar generation service with 11 styles, 9 color them
 
 **GIF animation consistency fix (2026-02-19, commit c695ee6):** animation.rs updated to use `avatar_palette()`. Animated GIF frame 0 now matches static PNG/SVG exactly — no more color mismatch between static and animated outputs. Pixel animation retains color-cycling effect but starts from palette base colors.
 
+### ✅ Robot Rendering Quality — SHIPPED (2026-02-19)
+
+- **Raster anti-aliasing:** Robot PNG/GIF rendering now uses 2× supersampling (for sizes ≤512) and Lanczos3 downsampling to reduce jagged edges while preserving crisp detail.
+- **Palette stability:** Robot visor shading is now HSL-based (darken lightness while preserving hue) instead of raw RGB subtraction — prevents muddy/shifted visor colors across different palettes.
+
 ### ⚠️ Gotchas
 
 - `cargo` not on PATH by default — use `export PATH="$HOME/.cargo/bin:$PATH"`

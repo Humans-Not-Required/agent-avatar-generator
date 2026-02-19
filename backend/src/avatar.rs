@@ -1,4 +1,4 @@
-use image::{ImageBuffer, Rgba, RgbaImage};
+use image::{imageops::FilterType, ImageBuffer, Rgba, RgbaImage};
 use sha2::{Digest, Sha256};
 
 /// Hash a seed string into 32 bytes for deterministic generation.
@@ -59,6 +59,42 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
         ((g + m) * 255.0).round() as u8,
         ((b + m) * 255.0).round() as u8,
     )
+}
+
+/// Convert RGB to HSL. Returns (h: 0-360, s: 0-1, l: 0-1)
+fn rgb_to_hsl(color: (u8, u8, u8)) -> (f64, f64, f64) {
+    let r = color.0 as f64 / 255.0;
+    let g = color.1 as f64 / 255.0;
+    let b = color.2 as f64 / 255.0;
+
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+
+    let l = (max + min) / 2.0;
+    if delta == 0.0 {
+        return (0.0, 0.0, l);
+    }
+
+    let s = if l > 0.5 {
+        delta / (2.0 - max - min)
+    } else {
+        delta / (max + min)
+    };
+
+    let mut h = if max == r {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if max == g {
+        60.0 * (((b - r) / delta) + 2.0)
+    } else {
+        60.0 * (((r - g) / delta) + 4.0)
+    };
+
+    if h < 0.0 {
+        h += 360.0;
+    }
+
+    (h, s, l)
 }
 
 /// Generate a harmonious color palette from hash bytes.
@@ -283,6 +319,15 @@ pub fn generate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
 
 /// Generate a robot face avatar.
 pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let out_size = size;
+    // Supersample at 2× for small/medium sizes to reduce jagged edges.
+    // Deterministic: downsample via Lanczos3 filter.
+    let size = if out_size <= 512 {
+        out_size.saturating_mul(2)
+    } else {
+        out_size
+    };
+
     let hash = hash_seed(seed);
     let pal = avatar_palette(&hash);
     let body_color = pal.primary;
@@ -498,12 +543,9 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
         let visor_h = (s * 0.06) as u32;
         let visor_left = head_left + (s * 0.04) as u32;
         let visor_right = head_right - (s * 0.04) as u32;
-        // Darken the visor area
-        let visor_color = (
-            body_color.0.saturating_sub(30),
-            body_color.1.saturating_sub(30),
-            body_color.2.saturating_sub(30),
-        );
+        // Darken the visor area (HSL-based so hue stays stable across palettes)
+        let (vh, vs, vl) = rgb_to_hsl(body_color);
+        let visor_color = hsl_to_rgb(vh, (vs * 0.85).clamp(0.0, 1.0), (vl - 0.18).clamp(0.0, 1.0));
         if visor_style == 1 {
             // Full band visor
             fill_rect(&mut img, visor_left, eye_y - visor_h, visor_right, eye_y + visor_h, visor_color);
@@ -704,7 +746,11 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
         _ => {} // No emblem
     }
 
-    img
+    if size != out_size {
+        image::imageops::resize(&img, out_size, out_size, FilterType::Lanczos3)
+    } else {
+        img
+    }
 }
 
 /// Generate a blockies-style avatar (8×8 pixel grid, Ethereum-style).
@@ -1833,11 +1879,9 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
         let visor_h = (s * 0.06) as u32;
         let visor_left = hl + (s * 0.04) as u32;
         let visor_right = hr - (s * 0.04) as u32;
-        let visor_color = (
-            body_color.0.saturating_sub(30),
-            body_color.1.saturating_sub(30),
-            body_color.2.saturating_sub(30),
-        );
+        // HSL-based darkening to preserve hue and avoid muddy visor colors
+        let (vh, vs, vl) = rgb_to_hsl(body_color);
+        let visor_color = hsl_to_rgb(vh, (vs * 0.85).clamp(0.0, 1.0), (vl - 0.18).clamp(0.0, 1.0));
         if visor_style == 1 {
             parts.push_str(&format!(
                 r#"<rect x="{visor_left}" y="{}" width="{}" height="{}" rx="3" fill="{}"/>"#,
