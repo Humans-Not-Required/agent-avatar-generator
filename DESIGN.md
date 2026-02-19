@@ -146,3 +146,6 @@ Zero-dependency Python client. Methods:
 - `/api/v1/openapi.json` — OpenAPI 3.0 spec
 - `/llms.txt` — AI-readable service description
 - `/.well-known/skills/agent-avatar-generator/SKILL.md` — Skill file
+
+### 11. `constellation`
+Network graph avatar — 7–14 nodes connected by edges based on proximity. A central hub node anchors the composition. Edge opacity fades with distance. Node colors use the avatar palette (primary/secondary/accent/highlight). Ideal for agent and network identities; visually represents connectivity and graph topology. Added 2026-02-19.

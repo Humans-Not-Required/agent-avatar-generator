@@ -2,7 +2,7 @@
 
 ## Current State: 10 Styles, 9 Color Themes, Animated GIF, Gallery ZIP ✅
 
-Self-hosted deterministic avatar generation service with 10 styles, 9 color themes, PNG/SVG/GIF output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
+Self-hosted deterministic avatar generation service with 11 styles, 9 color themes, PNG/SVG/GIF output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
 
 ### What's Done
 
@@ -41,7 +41,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - **CI/CD:** GitHub Actions → ghcr.io + Watchtower auto-deploy
 - **Gallery ZIP Download** — `POST /api/v1/avatar/gallery/zip`
   - Download multiple avatars as a ZIP file
-  - Style `"all"`: generates every style for each seed (seed × 10 styles)
+  - Style `"all"`: generates every style for each seed (seed × 11 styles)
   - Max 50 seeds, PNG or SVG format, custom size and background
   - Frontend: ZIP download button in gallery mode
 - **Color Themes** — 9 themes applied via post-processing (works with all styles):
@@ -54,7 +54,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 - **Shareable Gallery URLs:** Gallery state (seeds, style, size, theme) encoded in URL query params. Share a link that reconstructs the exact gallery view.
 - **Compare Mode:** Side-by-side theme comparison UI
   - Single style: shows all 10 themes (original + 9) for a seed
-  - All styles: style × theme matrix (10 styles × 10 themes = 100 avatars)
+  - All styles: style × theme matrix (11 styles × 10 themes = 100 avatars)
   - Shareable comparison URLs (?mode=compare&seed=X&style=Y)
   - Theme selector added to Gallery mode
 - **Animated GIF Avatars** — `?format=gif&frames=10&delay=8`
@@ -66,7 +66,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
   - Deterministic: same seed + params = identical GIF
   - Frontend: GIF format selector + frames/delay sliders with live animated preview
   - SDK: `generate_gif()` + GIF params on all methods
-- **Tests:** 419 Rust (140 unit × 2 binaries + 139 HTTP integration)
+- **Tests:** 440 Rust (140 unit × 2 binaries + 139 HTTP integration)
 - ✅ **Python SDK** — Zero-dependency client (`sdk/python/avatar_service.py`). All endpoints covered. Typed errors. Save helper. `gallery_zip()` and `gallery_zip_save()` methods. `themes()` method. `generate_timed()`, `batch_timed()`, `gallery_zip_timed()` for performance monitoring. 292 integration tests.
 
 ### Tech Stack

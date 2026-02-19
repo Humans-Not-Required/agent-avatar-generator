@@ -46,7 +46,7 @@ class ServerError(AvatarServiceError):
 class AvatarService:
     """Client for the Agent Avatar Generator API."""
 
-    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset"}
+    VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset", "constellation"}
     VALID_FORMATS = {"png", "svg", "gif"}
     VALID_THEMES = {"warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"}
 

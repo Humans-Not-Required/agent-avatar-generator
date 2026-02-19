@@ -60,7 +60,7 @@ fn test_generate_svg() {
 #[test]
 fn test_all_styles_png() {
     let client = client();
-    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
+    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "constellation"] {
         let response = client
             .get(format!("/api/v1/avatar/test?style={style}"))
             .dispatch();
@@ -76,7 +76,7 @@ fn test_all_styles_png() {
 #[test]
 fn test_all_styles_svg() {
     let client = client();
-    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst"] {
+    for style in &["geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "constellation"] {
         let response = client
             .get(format!("/api/v1/avatar/test?style={style}&format=svg"))
             .dispatch();
@@ -360,7 +360,7 @@ fn test_list_styles() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let styles = body.as_array().unwrap();
-    assert_eq!(styles.len(), 10);
+    assert_eq!(styles.len(), 11);
     let names: Vec<&str> = styles.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"geometric"));
     assert!(names.contains(&"rings"));
@@ -976,8 +976,8 @@ fn test_gallery_zip_all_styles() {
     let bytes = response.into_bytes().unwrap();
     let reader = std::io::Cursor::new(bytes);
     let zip = zip::ZipArchive::new(reader).unwrap();
-    // Should have 10 entries (one per style)
-    assert_eq!(zip.len(), 10);
+    // Should have 11 entries (one per style)
+    assert_eq!(zip.len(), 11);
 }
 
 #[test]
@@ -1154,8 +1154,8 @@ fn test_gallery_zip_multi_seed_all_styles() {
     let bytes = response.into_bytes().unwrap();
     let reader = std::io::Cursor::new(bytes);
     let zip = zip::ZipArchive::new(reader).unwrap();
-    // 2 seeds × 10 styles = 20 entries
-    assert_eq!(zip.len(), 20);
+    // 2 seeds × 11 styles = 22 entries
+    assert_eq!(zip.len(), 22);
 }
 
 // ── Themes ──
@@ -1547,8 +1547,8 @@ fn test_gallery_zip_all_styles_has_correct_count() {
     assert_eq!(response.status(), Status::Ok);
     let count_header = response.headers().get_one("X-Avatar-Count");
     assert!(count_header.is_some());
-    // 3 seeds × 10 styles = 30
-    assert_eq!(count_header.unwrap(), "30");
+    // 3 seeds × 11 styles = 33
+    assert_eq!(count_header.unwrap(), "33");
 }
 
 #[test]
@@ -1720,7 +1720,7 @@ fn test_compare_zip_all_themes_for_seed() {
 
     let reader = std::io::Cursor::new(&bytes);
     let archive = zip::ZipArchive::new(reader).unwrap();
-    assert_eq!(archive.len(), 10, "Should have 10 files (1 seed × 10 styles)");
+    assert_eq!(archive.len(), 11, "Should have 11 files (1 seed × 11 styles)");
 }
 
 #[test]

@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn test_gif_all_styles() {
         let styles = ["geometric", "rings", "robot", "blockies", "gradient",
-                      "initials", "starburst", "mosaic", "pixel", "sunset"];
+                      "initials", "starburst", "mosaic", "pixel", "sunset", "constellation"];
         for style in &styles {
             let gif = generate_gif("test", style, 64, None, 4, 10).unwrap();
             assert!(gif.starts_with(b"GIF89a"), "Style {style} should produce valid GIF");

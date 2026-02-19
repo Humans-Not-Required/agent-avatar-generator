@@ -1245,6 +1245,76 @@ pub fn generate_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>)
     img
 }
 
+/// Generate a constellation avatar — nodes connected by edges, network/graph style.
+/// Deterministic placement: 7-14 outer nodes + 1 central hub, edges drawn between nearby pairs.
+pub fn generate_constellation(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
+    let hash = hash_seed(seed);
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
+    }
+
+    let margin = size as f64 * 0.12;
+    let inner = size as f64 - margin * 2.0;
+    let center = size as f64 / 2.0;
+
+    // Generate 7-14 outer nodes from hash bytes
+    let num_nodes = 7 + (hash[0] % 8) as usize;
+    let mut nodes: Vec<(f64, f64, u32)> = Vec::new(); // (x, y, radius)
+    for i in 0..num_nodes {
+        let nx = margin + (hash[(i * 3) % 32] as f64 / 255.0) * inner;
+        let ny = margin + (hash[(i * 3 + 1) % 32] as f64 / 255.0) * inner;
+        let r = 3 + (hash[(i * 3 + 2) % 32] % 5) as u32; // 3–7px
+        nodes.push((nx, ny, r));
+    }
+
+    // Central hub node — slightly offset from exact center for variety
+    let hub_r = 7 + (hash[24] % 5) as u32;
+    let hub_offset_x = (hash[25] as f64 / 255.0 - 0.5) * inner * 0.15;
+    let hub_offset_y = (hash[26] as f64 / 255.0 - 0.5) * inner * 0.15;
+    let hub_idx = nodes.len();
+    nodes.push((center + hub_offset_x, center + hub_offset_y, hub_r));
+
+    // Draw edges between nodes within distance threshold
+    let threshold = size as f64 * 0.50;
+    let edge_color = pal.secondary;
+    for i in 0..nodes.len() {
+        let mut edge_count = 0u32;
+        for j in (i + 1)..nodes.len() {
+            let dx = nodes[i].0 - nodes[j].0;
+            let dy = nodes[i].1 - nodes[j].1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < threshold {
+                let base_alpha: f64 = if i == hub_idx || j == hub_idx { 160.0 } else { 100.0 };
+                let alpha = (base_alpha * (1.0 - dist / threshold * 0.6)) as u8;
+                draw_line_alpha(
+                    &mut img,
+                    nodes[i].0 as i32, nodes[i].1 as i32,
+                    nodes[j].0 as i32, nodes[j].1 as i32,
+                    edge_color, alpha,
+                );
+                edge_count += 1;
+                if edge_count >= 4 && i != hub_idx { break; }
+            }
+        }
+    }
+
+    // Draw nodes: glow then filled circle
+    let node_colors = [pal.primary, pal.secondary, pal.accent];
+    for (i, &(nx, ny, r)) in nodes.iter().enumerate() {
+        let color = if i == hub_idx { pal.highlight } else { node_colors[i % 3] };
+        if i == hub_idx || r >= 5 {
+            draw_glow_circle(&mut img, nx as u32, ny as u32, r + 3, color, 60);
+        }
+        fill_circle(&mut img, nx as u32, ny as u32, r, color);
+    }
+
+    img
+}
+
 /// Generate an avatar as PNG bytes.
 pub fn generate_png(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>) -> Result<Vec<u8>, String> {
     let img = generate_image(seed, style, size, bg)?;
@@ -1268,6 +1338,7 @@ pub fn generate_svg(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8)>
         "mosaic" => Ok(svg_mosaic(seed, size, bg)),
         "pixel" => Ok(svg_pixel(seed, size, bg)),
         "sunset" => Ok(svg_sunset(seed, size, bg)),
+        "constellation" => Ok(svg_constellation(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -1285,6 +1356,7 @@ pub fn generate_image(seed: &str, style: &str, size: u32, bg: Option<(u8, u8, u8
         "mosaic" => Ok(generate_mosaic(seed, size, bg)),
         "pixel" => Ok(generate_pixel(seed, size, bg)),
         "sunset" => Ok(generate_sunset(seed, size, bg)),
+        "constellation" => Ok(generate_constellation(seed, size, bg)),
         _ => Err(format!("Unknown style: {style}")),
     }
 }
@@ -1394,6 +1466,37 @@ fn lerp_u8(a: u8, b: u8, t: f64) -> u8 {
 fn hex_color(c: (u8, u8, u8)) -> String {
     format!("#{:02x}{:02x}{:02x}", c.0, c.1, c.2)
 }
+
+/// Draw a line with alpha blending using Bresenham's algorithm.
+fn draw_line_alpha(img: &mut RgbaImage, x0: i32, y0: i32, x1: i32, y1: i32, color: (u8, u8, u8), alpha: u8) {
+    let a = alpha as f64 / 255.0;
+    let dx = (x1 - x0).abs();
+    let dy = (y1 - y0).abs();
+    let sx = if x0 < x1 { 1i32 } else { -1 };
+    let sy = if y0 < y1 { 1i32 } else { -1 };
+    let mut err = dx - dy;
+    let mut x = x0;
+    let mut y = y0;
+    let w = img.width() as i32;
+    let h = img.height() as i32;
+    loop {
+        if x >= 0 && y >= 0 && x < w && y < h {
+            let existing = img.get_pixel(x as u32, y as u32);
+            let blended = Rgba([
+                ((color.0 as f64 * a) + (existing[0] as f64 * (1.0 - a))) as u8,
+                ((color.1 as f64 * a) + (existing[1] as f64 * (1.0 - a))) as u8,
+                ((color.2 as f64 * a) + (existing[2] as f64 * (1.0 - a))) as u8,
+                255,
+            ]);
+            img.put_pixel(x as u32, y as u32, blended);
+        }
+        if x == x1 && y == y1 { break; }
+        let e2 = 2 * err;
+        if e2 > -dy { err -= dy; x += sx; }
+        if e2 < dx { err += dx; y += sy; }
+    }
+}
+
 
 // ── SVG Generators ──
 
@@ -2420,6 +2523,79 @@ fn svg_sunset(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Strin
         bg = hex_color(bg),
     )
 }
+
+fn svg_constellation(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
+    let hash = hash_seed(seed);
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+
+    let margin = size as f64 * 0.12;
+    let inner = size as f64 - margin * 2.0;
+    let center = size as f64 / 2.0;
+
+    // Generate 7-14 outer nodes
+    let num_nodes = 7 + (hash[0] % 8) as usize;
+    let mut nodes: Vec<(f64, f64, f64)> = Vec::new();
+    for i in 0..num_nodes {
+        let nx = margin + (hash[(i * 3) % 32] as f64 / 255.0) * inner;
+        let ny = margin + (hash[(i * 3 + 1) % 32] as f64 / 255.0) * inner;
+        let r = 3.0 + (hash[(i * 3 + 2) % 32] % 5) as f64;
+        nodes.push((nx, ny, r));
+    }
+
+    // Central hub node
+    let hub_r = 7.0 + (hash[24] % 5) as f64;
+    let hub_offset_x = (hash[25] as f64 / 255.0 - 0.5) * inner * 0.15;
+    let hub_offset_y = (hash[26] as f64 / 255.0 - 0.5) * inner * 0.15;
+    let hub_idx = nodes.len();
+    nodes.push((center + hub_offset_x, center + hub_offset_y, hub_r));
+
+    let threshold = size as f64 * 0.50;
+    let edge_hex = hex_color(pal.secondary);
+    let node_colors = [pal.primary, pal.secondary, pal.accent];
+
+    let mut lines = String::new();
+    for i in 0..nodes.len() {
+        let mut count = 0u32;
+        for j in (i + 1)..nodes.len() {
+            let dx = nodes[i].0 - nodes[j].0;
+            let dy = nodes[i].1 - nodes[j].1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < threshold {
+                let base_op: f64 = if i == hub_idx || j == hub_idx { 0.65 } else { 0.40 };
+                let opacity = base_op * (1.0 - dist / threshold * 0.6);
+                lines.push_str(&format!(
+                    r##"<line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{:.1}" stroke="{}" stroke-width="1.2" opacity="{:.2}"/>"##,
+                    nodes[i].0, nodes[i].1, nodes[j].0, nodes[j].1, edge_hex, opacity
+                ));
+                count += 1;
+                if count >= 4 && i != hub_idx { break; }
+            }
+        }
+    }
+
+    let mut circles = String::new();
+    for (i, &(nx, ny, r)) in nodes.iter().enumerate() {
+        let color = if i == hub_idx { pal.highlight } else { node_colors[i % 3] };
+        // Glow ring for hub and larger nodes
+        if i == hub_idx || r >= 5.0 {
+            circles.push_str(&format!(
+                r##"<circle cx="{:.1}" cy="{:.1}" r="{:.1}" fill="{}" opacity="0.25"/>"##,
+                nx, ny, r + 3.5, hex_color(color)
+            ));
+        }
+        circles.push_str(&format!(
+            r##"<circle cx="{:.1}" cy="{:.1}" r="{:.1}" fill="{}"/>"##,
+            nx, ny, r, hex_color(color)
+        ));
+    }
+
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><rect width="{size}" height="{size}" fill="{bg}"/>{lines}{circles}</svg>"##,
+        bg = hex_color(bg),
+    )
+}
+
 
 #[cfg(test)]
 mod tests {

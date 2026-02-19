@@ -120,7 +120,7 @@ class TestStyles(unittest.TestCase):
     def test_list_styles(self):
         styles = self.client.styles()
         self.assertIsInstance(styles, list)
-        self.assertEqual(len(styles), 10)
+        self.assertEqual(len(styles), 11)
         names = [s["name"] for s in styles]
         self.assertIn("geometric", names)
         self.assertIn("rings", names)

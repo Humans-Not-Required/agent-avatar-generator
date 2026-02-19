@@ -59,11 +59,16 @@ pub fn available_styles() -> Vec<StyleInfo> {
             description: "Layered horizon bands with harmonious colors, wavy edges, and optional sun glow.".to_string(),
             sample_seed: "nanook".to_string(),
         },
+        StyleInfo {
+            name: "constellation".to_string(),
+            description: "Network graph — 7-14 nodes connected by edges. Hub-and-spoke topology. Ideal for agent and network identities.".to_string(),
+            sample_seed: "nanook".to_string(),
+        },
     ]
 }
 
 pub fn is_valid_style(style: &str) -> bool {
-    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic" | "pixel" | "sunset")
+    matches!(style, "geometric" | "rings" | "robot" | "blockies" | "gradient" | "initials" | "starburst" | "mosaic" | "pixel" | "sunset" | "constellation")
 }
 
 pub const DEFAULT_STYLE: &str = "geometric";
