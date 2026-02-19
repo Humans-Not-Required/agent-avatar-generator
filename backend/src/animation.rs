@@ -71,7 +71,9 @@ fn generate_animated_frame(
 /// Rings: pulsating ring radii — rings breathe in and out.
 fn animate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f64) -> RgbaImage {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| avatar::bg_color_from_hash(&hash));
+    let pal = avatar::avatar_palette(&hash);
+    let ring_colors = [pal.primary, pal.secondary, pal.accent, pal.highlight];
+    let bg = bg_override.unwrap_or(pal.background);
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
     for pixel in img.pixels_mut() {
@@ -87,7 +89,7 @@ fn animate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
     let wave = (t * std::f64::consts::TAU).sin();
 
     for ring in 0..num_rings {
-        let color = avatar::color_from_hash(&hash, (ring as usize) * 3);
+        let color = ring_colors[ring as usize % ring_colors.len()];
         let base_radius = max_radius * (num_rings - ring) / num_rings;
 
         // Each ring has a different phase offset
@@ -100,7 +102,7 @@ fn animate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
     }
 
     // Center dot with pulse
-    let dot_color = avatar::color_from_hash(&hash, 15);
+    let dot_color = pal.highlight;
     let base_dot_r = (size / 12).max(3);
     let dot_r = ((base_dot_r as f64) * (1.0 + wave * 0.15)) as u32;
     fill_circle(&mut img, cx, cy, dot_r, dot_color);
@@ -127,7 +129,8 @@ fn animate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
         let eye_spacing = size / 5;
         let cx = size / 2;
 
-        let eye_color = avatar::color_from_hash(&hash, 6);
+        let pal = avatar::avatar_palette(&hash);
+        let eye_color = pal.accent;
 
         // Left eye - horizontal line
         let left_cx = cx - eye_spacing;
@@ -137,7 +140,7 @@ fn animate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
         let blink_h = 2.max(size / 64);
 
         // Fill eye areas with head color first (erase open eyes)
-        let head_color = avatar::color_from_hash(&hash, 0);
+        let head_color = pal.primary;
         fill_rect_safe(&mut img, left_cx.saturating_sub(eye_size + 2), eye_y.saturating_sub(eye_size + 2),
                    left_cx + eye_size + 3, eye_y + eye_size + 3, head_color);
         fill_rect_safe(&mut img, right_cx.saturating_sub(eye_size + 2), eye_y.saturating_sub(eye_size + 2),
@@ -154,7 +157,8 @@ fn animate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
 /// Starburst: rotation animation — rays spin slowly.
 fn animate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f64) -> RgbaImage {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| avatar::bg_color_from_hash(&hash));
+    let pal = avatar::avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
     for pixel in img.pixels_mut() {
@@ -166,11 +170,7 @@ fn animate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t
     let max_r = size as f64 / 2.0 - 2.0;
 
     let num_rays = 8 + (hash[5] % 13) as usize; // 8-20 rays
-    let colors = [
-        avatar::color_from_hash(&hash, 0),
-        avatar::color_from_hash(&hash, 3),
-        avatar::color_from_hash(&hash, 6),
-    ];
+    let colors = [pal.primary, pal.secondary, pal.accent];
 
     // Rotation offset based on time
     let rotation = t * std::f64::consts::TAU;
@@ -203,7 +203,7 @@ fn animate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t
     }
 
     // Center dot
-    let dot_color = avatar::color_from_hash(&hash, 9);
+    let dot_color = pal.highlight;
     let dot_r = (size / 15).max(3);
     fill_circle(&mut img, size / 2, size / 2, dot_r, dot_color);
 
@@ -213,8 +213,9 @@ fn animate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t
 /// Gradient: angle rotation — gradient sweeps around.
 fn animate_gradient(seed: &str, size: u32, _bg_override: Option<(u8, u8, u8)>, t: f64) -> RgbaImage {
     let hash = hash_seed(seed);
-    let c1 = avatar::color_from_hash(&hash, 0);
-    let c2 = avatar::color_from_hash(&hash, 3);
+    let pal = avatar::avatar_palette(&hash);
+    let c1 = pal.primary;
+    let c2 = pal.secondary;
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
 
@@ -237,7 +238,7 @@ fn animate_gradient(seed: &str, size: u32, _bg_override: Option<(u8, u8, u8)>, t
 
     // Overlay shape from base (deterministic)
     let shape_type = hash[12] % 4;
-    let shape_color = avatar::color_from_hash(&hash, 9);
+    let shape_color = pal.accent;
     let cx = size / 2;
     let cy = size / 2;
     let shape_r = size / 4;
@@ -282,16 +283,17 @@ fn animate_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>, t: f6
     // Hue-shift the colors based on time
     let hue_shift = (t * 360.0) as i32;
 
-    let bg = bg_override.unwrap_or_else(|| shift_hue(avatar::bg_color_from_hash(&hash), hue_shift / 3));
+    let pal = avatar::avatar_palette(&hash);
+    let bg = bg_override.unwrap_or_else(|| shift_hue(pal.background, hue_shift / 3));
     let mut img: RgbaImage = ImageBuffer::new(size, size);
     for pixel in img.pixels_mut() {
         *pixel = Rgba([bg.0, bg.1, bg.2, 255]);
     }
 
     // Generate pixel creature grid (same logic as static, but with color shift)
-    let c1 = shift_hue(avatar::color_from_hash(&hash, 0), hue_shift);
-    let c2 = shift_hue(avatar::color_from_hash(&hash, 3), hue_shift);
-    let c3 = shift_hue(avatar::color_from_hash(&hash, 6), hue_shift);
+    let c1 = shift_hue(pal.primary, hue_shift);
+    let c2 = shift_hue(pal.secondary, hue_shift);
+    let c3 = shift_hue(pal.accent, hue_shift);
 
     let half_w = grid.div_ceil(2); // 6 columns, mirrored
 
