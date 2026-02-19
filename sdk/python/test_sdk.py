@@ -1117,8 +1117,8 @@ class TestTimingAPI(unittest.TestCase):
         data, gen_ms, count = self.client.gallery_zip_timed(
             ["gzt-all-1", "gzt-all-2"], style="all", size=32
         )
-        # 2 seeds × 10 styles = 20
-        self.assertEqual(count, 20)
+        # 2 seeds × 11 styles = 22
+        self.assertEqual(count, 22)
         self.assertIsInstance(gen_ms, float)
 
     def test_gallery_zip_timed_with_theme(self):
@@ -1928,7 +1928,7 @@ class TestStylesAdvanced(unittest.TestCase):
 
     def test_styles_count(self):
         data = self.client.styles()
-        self.assertEqual(len(data), 10)
+        self.assertEqual(len(data), 11)
 
 
 class TestThemesAdvanced(unittest.TestCase):
