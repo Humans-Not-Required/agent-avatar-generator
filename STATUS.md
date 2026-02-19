@@ -98,7 +98,7 @@ Self-hosted deterministic avatar generation service with 10 styles, 9 color them
 
 **Jordan feedback addressed.** If further improvement wanted (per-avatar color harmony — Option B in the proposal), that's a follow-up session.
 
-**Next possible improvement (Option B):** Generate an `AvatarPalette { primary, secondary, accent, background }` per seed so colors *within* a single avatar are harmonically related (analogous/triadic). Currently body/eye/accent colors in e.g. robot are vivid but may be unrelated hues. Option B would make them feel "designed."
+**Option B also shipped (2026-02-19, commit a7316e0):** `AvatarPalette` struct + `avatar_palette()` function. All 9 styles now derive colors from a single harmonically-related palette per seed. Robot body/eye/accent are complementary or triadic — feel designed. Rings cycle through a cohesive palette. Pixel creatures have palette-matched tri-color schemes. Colors within each avatar now share a harmonic relationship (complementary | triadic | analogous | split-complementary, deterministic from hash).
 
 ### ⚠️ Gotchas
 
