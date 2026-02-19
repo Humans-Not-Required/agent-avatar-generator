@@ -654,7 +654,8 @@ class TestConstellationStyle(unittest.TestCase):
         z = zipfile.ZipFile(io.BytesIO(data))
         names = z.namelist()
         self.assertEqual(len(names), 1)
-        self.assertIn("constellation", names[0])
+        # ZIP entries are named {seed}.png — the seed "net-agent" is the key identifier
+        self.assertIn("net-agent", names[0], "ZIP entry should be named after the seed")
 
     def test_constellation_svg_hub_glow(self):
         """SVG hub node has glow circle (opacity < 1 circle element)."""
