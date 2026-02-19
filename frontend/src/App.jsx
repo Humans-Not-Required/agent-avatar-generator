@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset'];
+const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset', 'constellation'];
 const THEMES = [
   { name: 'none', label: '—', desc: 'Default colors' },
   { name: 'warm', label: '🔥', desc: 'Warm' },
