@@ -95,6 +95,32 @@ fn harmonious_palette(hash: &[u8; 32]) -> Vec<(u8, u8, u8)> {
         .collect()
 }
 
+/// Named color palette for consistent, harmonious avatar coloring.
+/// All four vivid colors share a harmonic relationship (complementary, triadic,
+/// analogous, or split-complementary) so colors within a single avatar feel
+/// cohesive and designed rather than independently random.
+pub struct AvatarPalette {
+    pub primary:    (u8, u8, u8), // Main color — body, dominant fill
+    pub secondary:  (u8, u8, u8), // Supporting color — accents, borders
+    pub accent:     (u8, u8, u8), // Focal-point color — eyes, highlights
+    pub highlight:  (u8, u8, u8), // 4th color — fine details, mouth, dot
+    pub background: (u8, u8, u8), // Light pastel — matching the hue family
+}
+
+/// Generate a harmonious palette from a pre-computed hash.
+/// All four vivid colors are derived from color theory harmony rules;
+/// background is a light pastel tint in the same hue family.
+pub fn avatar_palette(hash: &[u8; 32]) -> AvatarPalette {
+    let colors = harmonious_palette(hash);
+    AvatarPalette {
+        primary:    colors[0],
+        secondary:  colors[1],
+        accent:     colors[2],
+        highlight:  colors[3],
+        background: bg_color_from_hash(hash),
+    }
+}
+
 /// Generate a mosaic avatar with harmonious color palette.
 pub fn generate_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
@@ -179,8 +205,9 @@ pub fn generate_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>)
 /// Generate a geometric identicon (5×5 grid, vertically symmetric).
 pub fn generate_geometric(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let fg = color_from_hash(&hash, 0);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let fg = pal.primary;
+    let bg = bg_override.unwrap_or(pal.background);
 
     let grid_size = 5u32;
     let cell_size = size / grid_size;
@@ -214,7 +241,9 @@ pub fn generate_geometric(seed: &str, size: u32, bg_override: Option<(u8, u8, u8
 /// Generate a rings-style avatar (concentric rings).
 pub fn generate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+    let ring_colors = [pal.primary, pal.secondary, pal.accent, pal.highlight];
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
 
@@ -228,7 +257,7 @@ pub fn generate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     let ring_width = center / num_rings as f64;
 
     for ring in 0..num_rings {
-        let color = color_from_hash(&hash, (ring as usize) * 3);
+        let color = ring_colors[ring as usize % ring_colors.len()];
         let outer_r = center - (ring as f64 * ring_width);
         let inner_r = outer_r - ring_width * 0.7;
 
@@ -250,10 +279,11 @@ pub fn generate_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
 /// Generate a robot face avatar.
 pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let body_color = color_from_hash(&hash, 0);
-    let eye_color = color_from_hash(&hash, 3);
-    let accent_color = color_from_hash(&hash, 12);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let body_color = pal.primary;
+    let eye_color = pal.accent;
+    let accent_color = pal.secondary;
+    let bg = bg_override.unwrap_or(pal.background);
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
 
@@ -538,7 +568,7 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
     // Mouth
     let mouth_y = (s * 0.55) as u32;
     let mouth_style = hash[8] % 4;
-    let mouth_color = color_from_hash(&hash, 9);
+    let mouth_color = pal.highlight;
 
     match mouth_style {
         0 => {
@@ -675,9 +705,10 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
 /// Generate a blockies-style avatar (8×8 pixel grid, Ethereum-style).
 pub fn generate_blockies(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let bg = bg_override.unwrap_or(pal.background);
 
     let grid = 8u32;
     let cell_size = size / grid;
@@ -713,9 +744,10 @@ pub fn generate_blockies(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)
 /// Generate a gradient-style avatar with overlay shape.
 pub fn generate_gradient(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let color1 = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
-    let color2 = color_from_hash(&hash, 3);
-    let shape_color = color_from_hash(&hash, 6);
+    let pal = avatar_palette(&hash);
+    let color1 = bg_override.unwrap_or(pal.primary);
+    let color2 = pal.secondary;
+    let shape_color = pal.accent;
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
     let center = size as f64 / 2.0;
@@ -897,7 +929,8 @@ fn render_char(
 /// Generate an initials-style avatar (1-2 letters on colored background).
 pub fn generate_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.primary); // Initials use vivid bg with contrasting text
     // Ensure letter color contrasts well with background
     let letter_color = {
         let brightness = (bg.0 as u16 + bg.1 as u16 + bg.2 as u16) / 3;
@@ -946,10 +979,11 @@ pub fn generate_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)
 /// Generate a starburst-style avatar (radial rays from center).
 pub fn generate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let color3 = color_from_hash(&hash, 6);
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let color3 = pal.accent;
 
     let mut img: RgbaImage = ImageBuffer::new(size, size);
 
@@ -1001,7 +1035,7 @@ pub fn generate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8
 
     // Center dot
     let dot_radius = (size as f64 * 0.08) as u32;
-    let dot_color = color_from_hash(&hash, 15);
+    let dot_color = pal.highlight;
     fill_circle(&mut img, size / 2, size / 2, dot_radius, dot_color);
 
     img
@@ -1010,10 +1044,11 @@ pub fn generate_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8
 /// Generate a pixel art creature avatar (space-invader inspired, horizontal symmetry).
 pub fn generate_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> RgbaImage {
     let hash = hash_seed(seed);
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let color3 = color_from_hash(&hash, 6);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let color3 = pal.accent;
+    let bg = bg_override.unwrap_or(pal.background);
 
     // 11×11 grid with horizontal symmetry (odd for center column)
     let grid = 11u32;
@@ -1359,8 +1394,9 @@ fn hex_color(c: (u8, u8, u8)) -> String {
 
 fn svg_geometric(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let fg = color_from_hash(&hash, 0);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let fg = pal.primary;
+    let bg = bg_override.unwrap_or(pal.background);
     let grid_size = 5u32;
     let cell_size = size / grid_size;
 
@@ -1395,14 +1431,16 @@ fn svg_geometric(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> St
 
 fn svg_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+    let ring_colors = [pal.primary, pal.secondary, pal.accent, pal.highlight];
     let center = size as f64 / 2.0;
     let num_rings = 5u32;
     let ring_width = center / num_rings as f64;
 
     let mut circles = String::new();
     for ring in 0..num_rings {
-        let color = color_from_hash(&hash, (ring as usize) * 3);
+        let color = ring_colors[ring as usize % ring_colors.len()];
         let outer_r = center - (ring as f64 * ring_width);
         let inner_r = outer_r - ring_width * 0.7;
         let stroke_w = outer_r - inner_r;
@@ -1421,11 +1459,12 @@ fn svg_rings(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
 
 fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let body_color = color_from_hash(&hash, 0);
-    let eye_color = color_from_hash(&hash, 3);
-    let mouth_color = color_from_hash(&hash, 9);
-    let accent_color = color_from_hash(&hash, 12);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let body_color = pal.primary;
+    let eye_color = pal.accent;
+    let mouth_color = pal.highlight;
+    let accent_color = pal.secondary;
+    let bg = bg_override.unwrap_or(pal.background);
     let s = size as f64;
 
     let mut parts = String::new();
@@ -1952,9 +1991,10 @@ fn svg_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String
 
 fn svg_blockies(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let bg = bg_override.unwrap_or(pal.background);
     let grid = 8u32;
     let cell_size = size / grid;
     let actual = cell_size * grid;
@@ -1990,9 +2030,10 @@ fn svg_blockies(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Str
 
 fn svg_gradient(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let color1 = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
-    let color2 = color_from_hash(&hash, 3);
-    let shape_color = color_from_hash(&hash, 6);
+    let pal = avatar_palette(&hash);
+    let color1 = bg_override.unwrap_or(pal.primary);
+    let color2 = pal.secondary;
+    let shape_color = pal.accent;
 
     let angle = (hash[9] as f64 / 255.0) * 180.0;
     let center = size as f64 / 2.0;
@@ -2042,7 +2083,8 @@ fn svg_gradient(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Str
 
 fn svg_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| color_from_hash(&hash, 0));
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.primary); // Initials use vivid bg with contrasting text
     let brightness = (bg.0 as u16 + bg.1 as u16 + bg.2 as u16) / 3;
     let letter_color = if brightness > 140 {
         (40, 40, 40)
@@ -2082,11 +2124,12 @@ fn svg_initials(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Str
 
 fn svg_starburst(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let color3 = color_from_hash(&hash, 6);
-    let dot_color = color_from_hash(&hash, 15);
+    let pal = avatar_palette(&hash);
+    let bg = bg_override.unwrap_or(pal.background);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let color3 = pal.accent;
+    let dot_color = pal.highlight;
 
     let center = size as f64 / 2.0;
     let num_rays = 8 + (hash[12] % 13) as u32;
@@ -2212,10 +2255,11 @@ fn svg_mosaic(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> Strin
 
 fn svg_pixel(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) -> String {
     let hash = hash_seed(seed);
-    let color1 = color_from_hash(&hash, 0);
-    let color2 = color_from_hash(&hash, 3);
-    let color3 = color_from_hash(&hash, 6);
-    let bg = bg_override.unwrap_or_else(|| bg_color_from_hash(&hash));
+    let pal = avatar_palette(&hash);
+    let color1 = pal.primary;
+    let color2 = pal.secondary;
+    let color3 = pal.accent;
+    let bg = bg_override.unwrap_or(pal.background);
 
     let grid = 11u32;
     let half = grid / 2 + 1;
