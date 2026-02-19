@@ -11,30 +11,29 @@ pub fn hash_seed(seed: &str) -> [u8; 32] {
     bytes
 }
 
-/// Extract a color from hash bytes at a given offset.
+/// Extract a vivid color from hash bytes at a given offset.
+/// Uses HSL color space to guarantee high saturation (no muddy grays/browns).
+/// Hue derived from 2 bytes for full 0-360° distribution.
+/// Saturation: 0.60-0.85 (always vivid). Lightness: 0.40-0.60 (always readable).
 pub fn color_from_hash(hash: &[u8; 32], offset: usize) -> (u8, u8, u8) {
-    let r = hash[offset % 32];
-    let g = hash[(offset + 1) % 32];
-    let b = hash[(offset + 2) % 32];
-    // Ensure colors are not too dark or too light for visibility
-    let brighten = |c: u8| -> u8 {
-        let v = c as u16;
-        ((v * 180 / 255) + 40) as u8 // Range: 40-220
-    };
-    (brighten(r), brighten(g), brighten(b))
+    let h0 = hash[offset % 32] as f64;
+    let h1 = hash[(offset + 1) % 32] as f64;
+    let hue = (h0 * 256.0 + h1) / 65535.0 * 360.0;
+    let saturation = 0.60 + (hash[(offset + 2) % 32] as f64 / 255.0) * 0.25; // 0.60-0.85
+    let lightness = 0.40 + (hash[(offset + 3) % 32] as f64 / 255.0) * 0.20;  // 0.40-0.60
+    hsl_to_rgb(hue, saturation, lightness)
 }
 
-/// Extract a background color (lighter/more pastel).
+/// Extract a pastel background color from hash bytes.
+/// Uses HSL to ensure a proper light tint rather than muddy gray-beige.
+/// Saturation: 0.20-0.40 (soft). Lightness: 0.82-0.94 (very light).
 pub fn bg_color_from_hash(hash: &[u8; 32]) -> (u8, u8, u8) {
-    let r = hash[29];
-    let g = hash[30];
-    let b = hash[31];
-    // Pastel: high brightness, low saturation
-    let pastel = |c: u8| -> u8 {
-        let v = c as u16;
-        ((v * 80 / 255) + 175) as u8 // Range: 175-255
-    };
-    (pastel(r), pastel(g), pastel(b))
+    let h0 = hash[28] as f64;
+    let h1 = hash[29] as f64;
+    let hue = (h0 * 256.0 + h1) / 65535.0 * 360.0;
+    let saturation = 0.20 + (hash[30] as f64 / 255.0) * 0.20; // 0.20-0.40 (soft pastel)
+    let lightness  = 0.82 + (hash[31] as f64 / 255.0) * 0.12; // 0.82-0.94 (very light)
+    hsl_to_rgb(hue, saturation, lightness)
 }
 
 /// Convert HSL to RGB. h: 0-360, s: 0.0-1.0, l: 0.0-1.0
@@ -2448,20 +2447,44 @@ mod tests {
 
     #[test]
     fn test_color_range() {
+        // HSL-based colors: vivid (high channel variance), readable (not too dark/light)
         let hash = hash_seed("test");
         let (r, g, b) = color_from_hash(&hash, 0);
-        assert!((40..=220).contains(&r));
-        assert!((40..=220).contains(&g));
-        assert!((40..=220).contains(&b));
+        // Channels are valid u8
+        let _ = (r, g, b);
+        // Vivid: max channel significantly above min (not muddy gray)
+        let max_ch = r.max(g).max(b) as i32;
+        let min_ch = r.min(g).min(b) as i32;
+        assert!(max_ch - min_ch >= 40, "Color should be vivid (not gray): ({r},{g},{b})");
+        // Readable: not pure black or pure white
+        assert!(max_ch >= 60, "Color should not be too dark: ({r},{g},{b})");
+        assert!(min_ch <= 200, "Color should not be too light: ({r},{g},{b})");
+    }
+
+    #[test]
+    fn test_color_vivid_across_seeds() {
+        // Multiple seeds should all produce vivid (non-muddy) colors
+        for seed in &["alice", "bob", "agent-007", "nanook", "xyz123"] {
+            let hash = hash_seed(seed);
+            let (r, g, b) = color_from_hash(&hash, 0);
+            let max_ch = r.max(g).max(b) as i32;
+            let min_ch = r.min(g).min(b) as i32;
+            assert!(max_ch - min_ch >= 40, "Color for '{seed}' should be vivid: ({r},{g},{b})");
+        }
     }
 
     #[test]
     fn test_bg_color_pastel() {
+        // HSL-based pastel: light (high brightness) with a real hue tint
         let hash = hash_seed("test");
         let (r, g, b) = bg_color_from_hash(&hash);
-        assert!(r >= 175);
-        assert!(g >= 175);
-        assert!(b >= 175);
+        // Very light: at least 2 of 3 channels should be high
+        let channels = [r, g, b];
+        let high_count = channels.iter().filter(|&&c| c >= 175).count();
+        assert!(high_count >= 2, "Background should be light: ({r},{g},{b})");
+        // Not pure white (has some hue tint)
+        let max_ch = r.max(g).max(b);
+        assert!(max_ch >= 180, "Background should be bright: ({r},{g},{b})");
     }
 
     #[test]
