@@ -1167,7 +1167,7 @@ fn test_list_themes() {
     assert_eq!(response.status(), Status::Ok);
     let body: serde_json::Value = response.into_json().unwrap();
     let themes = body.as_array().unwrap();
-    assert_eq!(themes.len(), 9);
+    assert_eq!(themes.len(), 15);
     let names: Vec<&str> = themes.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"warm"));
     assert!(names.contains(&"cool"));
@@ -1624,7 +1624,7 @@ fn test_all_themes_produce_different_pngs() {
     // At least some themes should produce different images than unthemed
     let base = &images[0].1;
     let different_count = images[1..].iter().filter(|(_, img)| img != base).count();
-    assert!(different_count >= 5, "At least 5 of 9 themes should differ from unthemed (got {different_count})");
+    assert!(different_count >= 5, "At least 5 of 15 themes should differ from unthemed (got {different_count})");
 }
 
 #[test]

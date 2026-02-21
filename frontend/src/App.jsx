@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 const STYLES = ['geometric', 'rings', 'robot', 'blockies', 'gradient', 'initials', 'starburst', 'mosaic', 'pixel', 'sunset', 'constellation'];
 const THEMES = [
-  { name: 'none', label: '—', desc: 'Default colors' },
+  { name: 'none', label: '—', desc: 'Default' },
   { name: 'warm', label: '🔥', desc: 'Warm' },
   { name: 'cool', label: '❄️', desc: 'Cool' },
   { name: 'ocean', label: '🌊', desc: 'Ocean' },
@@ -12,6 +12,13 @@ const THEMES = [
   { name: 'pastel', label: '🎀', desc: 'Pastel' },
   { name: 'monochrome', label: '⬛', desc: 'Mono' },
   { name: 'earth', label: '🪨', desc: 'Earth' },
+  // Tailwind palettes
+  { name: 'rose', label: '🌹', desc: 'Rose' },
+  { name: 'amber', label: '🟡', desc: 'Amber' },
+  { name: 'lime', label: '🍏', desc: 'Lime' },
+  { name: 'sky', label: '🔵', desc: 'Sky' },
+  { name: 'violet', label: '🟣', desc: 'Violet' },
+  { name: 'slate', label: '🩶', desc: 'Slate' },
 ];
 const THEME_NAMES = THEMES.filter(t => t.name !== 'none');
 const API_BASE = window.location.origin;
@@ -38,9 +45,7 @@ function App() {
   const [galleryText, setGalleryText] = useState(initial.galleryText || DEFAULT_GALLERY_SEEDS);
   const [style, setStyle] = useState(initial.style && STYLES.includes(initial.style) ? initial.style : 'geometric');
   const [size, setSize] = useState(initial.size || 256);
-  const [format, setFormat] = useState(['png', 'svg', 'gif'].includes(initial.format) ? initial.format : 'png');
-  const [gifFrames, setGifFrames] = useState(10);
-  const [gifDelay, setGifDelay] = useState(8);
+  const [format, setFormat] = useState(['png', 'svg'].includes(initial.format) ? initial.format : 'png');
   const [copied, setCopied] = useState(false);
   const [galleryCopied, setGalleryCopied] = useState(false);
   const [galleryStyle, setGalleryStyle] = useState(
@@ -64,11 +69,8 @@ function App() {
     .slice(0, 50);
 
   const themeParam = theme !== 'none' ? `&theme=${theme}` : '';
-  const gifParams = format === 'gif' ? `&frames=${gifFrames}&delay=${gifDelay}` : '';
-  const avatarUrl = format === 'gif'
-    ? `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=gif&frames=${gifFrames}&delay=${gifDelay}${themeParam}`
-    : `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=png${themeParam}`;
-  const downloadUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}${gifParams}${themeParam}`;
+  const avatarUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}${themeParam}`;
+  const downloadUrl = `${API_BASE}/api/v1/avatar/${encodeURIComponent(seed)}?style=${style}&size=${size}&format=${format}${themeParam}`;
   const shareUrl = `${API_BASE}/avatar/view/${encodeURIComponent(seed)}?style=${style}&size=${size}`;
 
   const downloadZip = async () => {
@@ -240,7 +242,7 @@ function App() {
               <div style={fieldStyle}>
                 <label style={labelStyle}>Format</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {['png', 'svg', 'gif'].map(f => (
+                  {['png', 'svg'].map(f => (
                     <button
                       key={f}
                       onClick={() => setFormat(f)}
@@ -255,37 +257,10 @@ function App() {
                 </div>
               </div>
 
-              {format === 'gif' && (
-                <>
-                  <div style={fieldStyle}>
-                    <label style={labelStyle}>Frames: {gifFrames}</label>
-                    <input
-                      type="range"
-                      min={2}
-                      max={30}
-                      value={gifFrames}
-                      onChange={e => setGifFrames(Number(e.target.value))}
-                      style={rangeStyle}
-                    />
-                  </div>
-                  <div style={fieldStyle}>
-                    <label style={labelStyle}>Speed: {gifDelay}cs ({gifDelay * 10}ms/frame)</label>
-                    <input
-                      type="range"
-                      min={1}
-                      max={30}
-                      value={gifDelay}
-                      onChange={e => setGifDelay(Number(e.target.value))}
-                      style={rangeStyle}
-                    />
-                  </div>
-                </>
-              )}
-
               <div style={previewStyle}>
                 {seed && (
                   <img
-                    key={`${seed}-${style}-${size}-${theme}-${format}-${gifFrames}-${gifDelay}`}
+                    key={`${seed}-${style}-${size}-${theme}-${format}`}
                     src={avatarUrl}
                     alt={`Avatar for ${seed}`}
                     style={{ borderRadius: 12, maxWidth: '100%' }}
@@ -297,7 +272,7 @@ function App() {
 
               <div style={actionsStyle}>
                 <a href={downloadUrl} download={`${seed || 'avatar'}.${format}`} style={buttonStyle}>
-                  ⬇ Download {format.toUpperCase()}{format === 'gif' ? ` (${gifFrames}f)` : ''}
+                  ⬇ Download {format.toUpperCase()}
                 </a>
                 <button onClick={copyShareUrl} style={buttonStyle}>
                   {copied ? '✅ Copied!' : '🔗 Copy Share URL'}

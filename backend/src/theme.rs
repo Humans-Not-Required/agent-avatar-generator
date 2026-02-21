@@ -13,6 +13,13 @@ pub enum Theme {
     Pastel,
     Monochrome,
     Earth,
+    // Tailwind-inspired palettes
+    Rose,
+    Amber,
+    Lime,
+    Sky,
+    Violet,
+    Slate,
 }
 
 struct ThemeConfig {
@@ -42,6 +49,12 @@ impl Theme {
             "pastel" => Some(Self::Pastel),
             "monochrome" | "mono" => Some(Self::Monochrome),
             "earth" => Some(Self::Earth),
+            "rose" => Some(Self::Rose),
+            "amber" => Some(Self::Amber),
+            "lime" => Some(Self::Lime),
+            "sky" => Some(Self::Sky),
+            "violet" => Some(Self::Violet),
+            "slate" => Some(Self::Slate),
             _ => None,
         }
     }
@@ -58,6 +71,12 @@ impl Theme {
             Self::Pastel => "pastel",
             Self::Monochrome => "monochrome",
             Self::Earth => "earth",
+            Self::Rose => "rose",
+            Self::Amber => "amber",
+            Self::Lime => "lime",
+            Self::Sky => "sky",
+            Self::Violet => "violet",
+            Self::Slate => "slate",
         }
     }
 
@@ -134,6 +153,61 @@ impl Theme {
                 light_range: (0.3, 0.6),
                 bg_sat_range: (0.1, 0.25),
                 bg_light_range: (0.88, 0.95),
+            },
+            // Tailwind-inspired palettes
+            Self::Rose => ThemeConfig {
+                // Tailwind Rose: hue ~355 (warm pink-red)
+                hue_center: 355.0,
+                hue_range: 25.0,
+                sat_range: (0.65, 0.92),
+                light_range: (0.35, 0.65),
+                bg_sat_range: (0.2, 0.4),
+                bg_light_range: (0.92, 0.98),
+            },
+            Self::Amber => ThemeConfig {
+                // Tailwind Amber: hue ~38 (orange-yellow)
+                hue_center: 38.0,
+                hue_range: 20.0,
+                sat_range: (0.7, 0.98),
+                light_range: (0.4, 0.65),
+                bg_sat_range: (0.3, 0.5),
+                bg_light_range: (0.90, 0.97),
+            },
+            Self::Lime => ThemeConfig {
+                // Tailwind Lime: hue ~84 (yellow-green)
+                hue_center: 84.0,
+                hue_range: 25.0,
+                sat_range: (0.5, 0.85),
+                light_range: (0.3, 0.6),
+                bg_sat_range: (0.2, 0.4),
+                bg_light_range: (0.90, 0.97),
+            },
+            Self::Sky => ThemeConfig {
+                // Tailwind Sky: hue ~199 (bright sky blue)
+                hue_center: 199.0,
+                hue_range: 20.0,
+                sat_range: (0.65, 0.95),
+                light_range: (0.35, 0.65),
+                bg_sat_range: (0.2, 0.4),
+                bg_light_range: (0.90, 0.97),
+            },
+            Self::Violet => ThemeConfig {
+                // Tailwind Violet: hue ~263 (purple-blue)
+                hue_center: 263.0,
+                hue_range: 25.0,
+                sat_range: (0.5, 0.85),
+                light_range: (0.35, 0.65),
+                bg_sat_range: (0.1, 0.3),
+                bg_light_range: (0.92, 0.98),
+            },
+            Self::Slate => ThemeConfig {
+                // Tailwind Slate: hue ~215, low saturation (cool blue-gray)
+                hue_center: 215.0,
+                hue_range: 15.0,
+                sat_range: (0.05, 0.25),
+                light_range: (0.2, 0.7),
+                bg_sat_range: (0.03, 0.12),
+                bg_light_range: (0.90, 0.97),
             },
         }
     }
@@ -314,6 +388,30 @@ pub fn available_themes() -> Vec<ThemeInfo> {
             name: "earth".to_string(),
             description: "Browns, tans, and muted tones. Grounded and warm.".to_string(),
         },
+        ThemeInfo {
+            name: "rose".to_string(),
+            description: "Tailwind Rose — warm pinks and crimsons. Bold and vibrant.".to_string(),
+        },
+        ThemeInfo {
+            name: "amber".to_string(),
+            description: "Tailwind Amber — golden oranges and warm yellows. Rich and energetic.".to_string(),
+        },
+        ThemeInfo {
+            name: "lime".to_string(),
+            description: "Tailwind Lime — bright yellow-greens. Fresh and striking.".to_string(),
+        },
+        ThemeInfo {
+            name: "sky".to_string(),
+            description: "Tailwind Sky — clear sky blues. Open and optimistic.".to_string(),
+        },
+        ThemeInfo {
+            name: "violet".to_string(),
+            description: "Tailwind Violet — deep purples. Creative and distinctive.".to_string(),
+        },
+        ThemeInfo {
+            name: "slate".to_string(),
+            description: "Tailwind Slate — cool blue-grays. Professional and understated.".to_string(),
+        },
     ]
 }
 
@@ -342,6 +440,7 @@ mod tests {
         for theme in &[
             Theme::Warm, Theme::Cool, Theme::Ocean, Theme::Forest,
             Theme::Sunset, Theme::Neon, Theme::Pastel, Theme::Monochrome, Theme::Earth,
+            Theme::Rose, Theme::Amber, Theme::Lime, Theme::Sky, Theme::Violet, Theme::Slate,
         ] {
             assert_eq!(Theme::parse(theme.name()), Some(theme.clone()));
         }
@@ -525,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_available_themes_count() {
-        assert_eq!(available_themes().len(), 9);
+        assert_eq!(available_themes().len(), 15);
     }
 
     #[test]
@@ -533,8 +632,15 @@ mod tests {
         assert!(is_valid_theme("warm"));
         assert!(is_valid_theme("Neon"));
         assert!(is_valid_theme("mono"));
+        assert!(is_valid_theme("rose"));
+        assert!(is_valid_theme("amber"));
+        assert!(is_valid_theme("lime"));
+        assert!(is_valid_theme("sky"));
+        assert!(is_valid_theme("violet"));
+        assert!(is_valid_theme("slate"));
         assert!(!is_valid_theme("rainbow"));
         assert!(!is_valid_theme(""));
+        assert!(!is_valid_theme("blue")); // not a valid theme name
     }
 
     #[test]

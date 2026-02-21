@@ -601,6 +601,24 @@ pub fn generate_robot(seed: &str, size: u32, bg_override: Option<(u8, u8, u8)>) 
         }
     }
 
+    // Eye highlight (lens reflection dot) — small bright spot at top-left of each eye
+    // Gives a glassy/metallic "alive" quality. Size is ~30% of eye radius.
+    let highlight_r = ((eye_size as f64 * 0.32) as u32).max(1);
+    let h_offset = (eye_size as f64 * 0.3) as u32;
+    let h_color: (u8, u8, u8) = (220, 235, 255); // cool white highlight
+    fill_circle(&mut img,
+        left_eye_x.saturating_sub(h_offset),
+        eye_y.saturating_sub(h_offset),
+        highlight_r,
+        h_color,
+    );
+    fill_circle(&mut img,
+        right_eye_x.saturating_sub(h_offset),
+        eye_y.saturating_sub(h_offset),
+        highlight_r,
+        h_color,
+    );
+
     // Cheek bolts
     let bolt_style = hash[15] % 2;
     if bolt_style == 1 {
