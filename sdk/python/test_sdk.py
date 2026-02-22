@@ -992,14 +992,20 @@ class TestThemes(unittest.TestCase):
         self.client = AvatarService()
 
     def test_list_themes(self):
-        """GET /api/v1/themes returns 9 themes."""
+        """GET /api/v1/themes returns 15 themes (9 original + 6 Tailwind palettes added 2026-02-21)."""
         themes = self.client.themes()
-        self.assertEqual(len(themes), 9)
+        self.assertEqual(len(themes), 15)
         names = [t["name"] for t in themes]
+        # Original themes
         self.assertIn("warm", names)
         self.assertIn("cool", names)
         self.assertIn("neon", names)
         self.assertIn("monochrome", names)
+        # Tailwind palettes
+        self.assertIn("rose", names)
+        self.assertIn("amber", names)
+        self.assertIn("sky", names)
+        self.assertIn("violet", names)
 
     def test_themes_have_descriptions(self):
         """Each theme has a name and description."""

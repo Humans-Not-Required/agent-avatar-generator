@@ -1,8 +1,10 @@
 # Agent Avatar Generator - Status
 
-## Current State: 11 Styles, 9 Color Themes, Animated GIF, Gallery ZIP ✅
+## Current State: 11 Styles, 15 Color Themes, Gallery ZIP ✅
 
-Self-hosted deterministic avatar generation service with 11 styles, 9 color themes, PNG/SVG/GIF output, React frontend with gallery view, and Python SDK. All tests passing, CI configured.
+Self-hosted deterministic avatar generation service with 11 styles, 15 color themes (9 original + 6 Tailwind palettes), PNG/SVG output, React frontend with gallery view, and Python SDK. All tests passing, CI green.
+
+**Note:** GIF output removed from frontend UI (Jordan directive 2026-02-21). Backend API still supports GIF for SDK/direct API callers.
 
 ### What's Done
 
