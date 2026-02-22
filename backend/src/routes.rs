@@ -682,13 +682,19 @@ pub fn openapi() -> (ContentType, &'static str) {
 /// GET /api/v1/llms.txt
 #[get("/llms.txt")]
 pub fn llms_txt() -> RawText<&'static str> {
-    RawText(include_str!("../llms.txt"))
+    RawText(include_str!("../SKILL.md"))
 }
 
 /// GET /llms.txt (root)
 #[get("/llms.txt")]
 pub fn root_llms_txt() -> RawText<&'static str> {
-    RawText(include_str!("../llms.txt"))
+    RawText(include_str!("../SKILL.md"))
+}
+
+/// GET /SKILL.md — canonical AI-readable service guide
+#[get("/SKILL.md")]
+pub fn skill_md() -> RawText<&'static str> {
+    RawText(include_str!("../SKILL.md"))
 }
 
 /// GET /.well-known/skills/agent-avatar-generator/index.json
@@ -853,6 +859,7 @@ pub fn test_rocket() -> rocket::Rocket<rocket::Build> {
         .mount(
             "/",
             routes![
+                skill_md,
                 root_llms_txt,
                 skills_index,
                 skills_skill_md,
