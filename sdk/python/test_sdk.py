@@ -992,7 +992,7 @@ class TestThemes(unittest.TestCase):
         self.client = AvatarService()
 
     def test_list_themes(self):
-        """GET /api/v1/themes returns 15 themes (9 original + 6 Tailwind palettes added 2026-02-21)."""
+        """GET /api/v1/themes returns all 15 themes."""
         themes = self.client.themes()
         self.assertEqual(len(themes), 15)
         names = [t["name"] for t in themes]
@@ -1043,14 +1043,14 @@ class TestThemes(unittest.TestCase):
         self.assertNotEqual(warm, cool)
 
     def test_all_themes_png(self):
-        """All 9 themes produce valid PNGs."""
+        """All 15 themes produce valid PNGs."""
         for name in ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]:
             data = self.client.generate_png("test", theme=name)
             self.assertIsInstance(data, bytes, f"Theme {name} should produce bytes")
             self.assertEqual(data[:4], b"\x89PNG", f"Theme {name} should produce valid PNG")
 
     def test_all_themes_svg(self):
-        """All 9 themes produce valid SVGs."""
+        """All 15 themes produce valid SVGs."""
         for name in ["warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"]:
             data = self.client.generate_svg("test", theme=name)
             self.assertTrue(data.startswith("<svg"), f"Theme {name} should produce valid SVG")
@@ -1289,7 +1289,7 @@ class TestThemeComparison(unittest.TestCase):
         plain = self.client.generate(seed, style="geometric", size=64)
         different_from_plain = sum(1 for img in images.values() if img != plain)
         self.assertGreaterEqual(different_from_plain, 5,
-                                f"At least 5 of 9 themes should differ from plain (got {different_from_plain})")
+                                f"At least 5 of 15 themes should differ from plain (got {different_from_plain})")
 
     def test_theme_comparison_deterministic(self):
         """Themed avatars should be deterministic."""
@@ -2033,7 +2033,8 @@ class TestThemesAdvanced(unittest.TestCase):
     def setUp(self):
         self.client = AvatarService()
 
-    def test_all_9_themes_listed(self):
+    def test_all_themes_listed(self):
+        """All themes from the API match the SDK's VALID_THEMES set."""
         data = self.client.themes()
         theme_names = {t["name"] for t in data}
         self.assertEqual(theme_names, AvatarService.VALID_THEMES)
@@ -2046,8 +2047,9 @@ class TestThemesAdvanced(unittest.TestCase):
             self.assertGreater(len(theme["description"]), 0)
 
     def test_themes_count(self):
+        """GET /api/v1/themes returns all 15 themes."""
         data = self.client.themes()
-        self.assertEqual(len(data), 9)
+        self.assertEqual(len(data), 15)
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ class AvatarService:
 
     VALID_STYLES = {"geometric", "rings", "robot", "blockies", "gradient", "initials", "starburst", "mosaic", "pixel", "sunset", "constellation"}
     VALID_FORMATS = {"png", "svg", "gif"}
-    VALID_THEMES = {"warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth"}
+    VALID_THEMES = {"warm", "cool", "ocean", "forest", "sunset", "neon", "pastel", "monochrome", "earth", "rose", "amber", "lime", "sky", "violet", "slate"}
 
     def __init__(self, base_url=None, timeout=30):
         self.base_url = (base_url or os.environ.get("AVATAR_SERVICE_URL", "http://localhost:8000")).rstrip("/")
